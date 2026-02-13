@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../../config/db';
-import { generateTokens } from '../../common/utils/jwt';
+import { generateTokens, verifyRefreshToken, getRefreshTokenExpiryDate } from '../../common/utils/jwt';
 import { BadRequestError, UnauthorizedError } from '../../common/errors/http-error';
 import { AuditService, AuditAction } from '../audit/audit.service';
 
@@ -62,7 +62,6 @@ export class AuthService {
       });
 
       if (!manualExchange) {
-        // Create manual exchange if it doesn't exist (should be seeded)
         manualExchange = await tx.exchange.create({
           data: {
             name: 'Manual',
@@ -96,11 +95,14 @@ export class AuthService {
       { email: result.user.email, fullName: result.user.fullName }
     );
     
-    // Convert BigInt to string for JWT payload
+    // Generate tokens
     const userId = result.user.id.toString(); 
     const tokens = generateTokens({ userId, email: result.user.email });
 
-    return { user: result.user, tokens };
+    // Store session
+    await this.createSession(result.user.id, tokens.jti);
+
+    return { user: result.user, tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } };
   }
 
   async login(email: string, password: string) {
@@ -117,12 +119,89 @@ export class AuthService {
       throw new UnauthorizedError('Invalid credentials');
     }
 
+    // Update last login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
     // Log user login
     await this.auditService.logLogin(user.id);
 
+    // Generate tokens
     const userId = user.id.toString();
     const tokens = generateTokens({ userId, email: user.email });
 
-    return { user, tokens };
+    // Store session
+    await this.createSession(user.id, tokens.jti);
+
+    return { user, tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken } };
+  }
+
+  async refresh(refreshToken: string) {
+    // Verify refresh token
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch {
+      throw new UnauthorizedError('Invalid or expired refresh token');
+    }
+
+    // Check session exists and not revoked
+    if (payload.jti) {
+      const session = await prisma.userSession.findFirst({
+        where: { jwtId: payload.jti },
+      });
+
+      if (!session) {
+        throw new UnauthorizedError('Session not found');
+      }
+
+      if (session.revokedAt) {
+        throw new UnauthorizedError('Session has been revoked');
+      }
+
+      // Revoke old session
+      await prisma.userSession.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    // Generate new tokens
+    const newTokens = generateTokens({ userId: payload.userId, email: payload.email });
+
+    // Create new session
+    await this.createSession(BigInt(payload.userId), newTokens.jti);
+
+    return { accessToken: newTokens.accessToken, refreshToken: newTokens.refreshToken };
+  }
+
+  async logout(jti?: string, userId?: string) {
+    if (jti) {
+      // Revoke specific session by JWT ID
+      await prisma.userSession.updateMany({
+        where: { jwtId: jti, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    } else if (userId) {
+      // Revoke all sessions for user
+      await prisma.userSession.updateMany({
+        where: { userId: BigInt(userId), revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+  }
+
+  private async createSession(userId: bigint, jwtId: string, userAgent?: string, ipAddress?: string) {
+    return prisma.userSession.create({
+      data: {
+        userId,
+        jwtId,
+        userAgent: userAgent || null,
+        ipAddress: ipAddress || null,
+        expiresAt: getRefreshTokenExpiryDate(),
+      },
+    });
   }
 }

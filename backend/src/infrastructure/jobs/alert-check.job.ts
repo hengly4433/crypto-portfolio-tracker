@@ -4,21 +4,37 @@ import { getRedisConnection } from '../../config/redis';
 import { AlertService } from '../../modules/alerts/alert.service';
 import { NotificationService } from '../../modules/notifications/notification.service';
 import { prisma } from '../../config/db';
+import { createModuleLogger } from '../../common/logger/logger';
+import { emitAlertTriggered } from '../websocket';
 
-// Redis connection for BullMQ
-// Using separate connections to avoid blocking issues
+const log = createModuleLogger('alert-check-job');
 
 // Create a queue for alert checks
 export const alertCheckQueue = new Queue('alert-checks', { connection: getRedisConnection() });
 
 // Worker to process alert check jobs
 export const alertCheckWorker = new Worker('alert-checks', async (job) => {
-  console.log(`Processing alert check job ${job.id}`);
+  log.info({ jobId: job.id }, 'Processing alert check job');
   
   const alertService = new AlertService();
-  await alertService.checkAlerts();
+  const triggeredAlerts = await alertService.checkAlerts();
   
-  console.log(`Completed alert check job ${job.id}`);
+  // Emit WebSocket events for each triggered alert
+  if (Array.isArray(triggeredAlerts)) {
+    for (const alert of triggeredAlerts) {
+      emitAlertTriggered(alert.userId.toString(), {
+        alertId: alert.id.toString(),
+        alertType: alert.alertType,
+        conditionValue: alert.conditionValue,
+        assetSymbol: alert.asset?.symbol,
+        portfolioName: alert.portfolio?.name,
+        triggeredAt: new Date().toISOString(),
+      });
+      log.info({ alertId: alert.id.toString(), userId: alert.userId.toString() }, 'Alert triggered, WebSocket event emitted');
+    }
+  }
+  
+  log.info({ jobId: job.id }, 'Completed alert check job');
 }, { connection: getRedisConnection() });
 
 // Queue events for monitoring
@@ -26,9 +42,8 @@ export const alertQueueEvents = new QueueEvents('alert-checks', { connection: ge
 
 // Schedule cron job to add alert check to queue every minute
 export function scheduleAlertChecks() {
-  // Every minute: "* * * * *"
   cron.schedule('* * * * *', async () => {
-    console.log('Scheduling alert check job...');
+    log.info('Scheduling alert check job');
     await alertCheckQueue.add('check-alerts', {}, {
       jobId: `alert-check-${Date.now()}`,
       removeOnComplete: true,
@@ -36,12 +51,12 @@ export function scheduleAlertChecks() {
     });
   });
 
-  console.log('Alert check scheduler started (every minute)');
+  log.info('Alert check scheduler started (every minute)');
 }
 
 // Function to process pending notifications (send emails, push notifications, etc.)
 export async function processPendingNotifications() {
-  console.log('Processing pending notifications...');
+  log.info('Processing pending notifications');
   
   const notificationService = new NotificationService();
   const pendingNotifications = await prisma.notification.findMany({
@@ -73,9 +88,9 @@ export async function processPendingNotifications() {
         },
       });
       
-      console.log(`Sent notification ${notification.id} via ${notification.channel}`);
+      log.info({ notificationId: notification.id, channel: notification.channel }, 'Notification sent');
     } catch (error) {
-      console.error(`Failed to process notification ${notification.id}:`, error);
+      log.error({ notificationId: notification.id, error }, 'Failed to process notification');
       
       // Mark as failed after retries
       await prisma.notification.update({
@@ -91,13 +106,12 @@ export async function processPendingNotifications() {
 
 // Schedule notification processing every 5 minutes
 export function scheduleNotificationProcessing() {
-  // Every 5 minutes: "*/5 * * * *"
   cron.schedule('*/5 * * * *', async () => {
-    console.log('Scheduling notification processing...');
+    log.info('Scheduling notification processing');
     await processPendingNotifications();
   });
 
-  console.log('Notification processing scheduler started (every 5 minutes)');
+  log.info('Notification processing scheduler started (every 5 minutes)');
 }
 
 // Initialize alert checking and notification processing
@@ -107,12 +121,12 @@ export function initializeAlertJobs() {
   
   // Listen for worker events
   alertCheckWorker.on('completed', (job) => {
-    console.log(`Alert check job ${job.id} completed`);
+    log.info({ jobId: job.id }, 'Alert check job completed');
   });
 
   alertCheckWorker.on('failed', (job, err) => {
-    console.error(`Alert check job ${job?.id} failed:`, err);
+    log.error({ jobId: job?.id, error: err.message }, 'Alert check job failed');
   });
 
-  console.log('Alert checking jobs initialized');
+  log.info('Alert checking jobs initialized');
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Wallet, TrendingUp, ArrowRight, Loader2 } from 'lucide-react';
@@ -64,12 +65,13 @@ export default function PortfoliosPage() {
     try {
       const result = await apiClient.createPortfolio(name, baseCurrency);
       if (result.error) {
-        alert(result.error);
+        toast.error(result.error);
         return;
       }
+      toast.success('Portfolio created successfully');
       loadPortfolios();
     } catch (err) {
-      alert('Failed to create portfolio');
+      toast.error('Failed to create portfolio');
     }
   };
 

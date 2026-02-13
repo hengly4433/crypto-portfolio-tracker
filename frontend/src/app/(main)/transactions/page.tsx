@@ -1,73 +1,43 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Filter, Loader2, Edit, Trash2 } from 'lucide-react';
-
-interface Transaction {
-  id: string;
-  portfolioId: string;
-  portfolioName: string;
-  assetId: string;
-  assetSymbol: string;
-  assetName: string;
-  side: string;
-  quantity: number;
-  price: number;
-  transactionCurrency: string;
-  grossAmount: number;
-  feeAmount: number;
-  tradeTime: string;
-  note?: string;
-}
+import { usePortfolios } from '@/lib/hooks/use-portfolios';
+import { useTransactions, useDeleteTransaction } from '@/lib/hooks/use-transactions';
+import { Portfolio, Transaction } from '@/lib/api-client';
+import { toast } from 'sonner';
 
 export default function TransactionsPage() {
-  const router = useRouter();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: portfolios = [] } = usePortfolios();
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('');
 
-  useEffect(() => {
-    if (!apiClient.isAuthenticated()) {
-      router.push('/login');
-      return;
-    }
+  // Use the first portfolio if none selected
+  const activePortfolioId = selectedPortfolioId || (portfolios.length > 0 ? portfolios[0].id : '');
 
-    loadData();
-  }, [router]);
+  const { data: txData, isLoading, error } = useTransactions(activePortfolioId);
+  const deleteTransaction = useDeleteTransaction();
 
-  const loadData = async () => {
+  const transactions: Transaction[] = txData?.data ?? (Array.isArray(txData) ? txData : []);
+
+  const handleDelete = async (transactionId: string) => {
+    if (!confirm('Delete this transaction? This will reverse the position changes.')) return;
     try {
-      setIsLoading(true);
-      
-      // Load transactions from all portfolios
-      await loadAllTransactions();
-
-    } catch (err) {
-      setError('Failed to load data');
-    } finally {
-      setIsLoading(false);
+      await deleteTransaction.mutateAsync({ portfolioId: activePortfolioId, transactionId });
+      toast.success('Transaction deleted');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete');
     }
-  };
-
-  const loadAllTransactions = async () => {
-    // In a real app, you would have an endpoint to get all transactions across portfolios
-    // For now, we'll simulate with empty array or fetch properly if endpoint exists
-    // setTransactions([]); 
-    // Mocking some data for visual verification if API returns empty
-     setTransactions([]);
   };
 
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
          <div className="animate-pulse flex flex-col items-center gap-4">
-           <div className="w-12 h-12 bg-primary/20 rounded-full animate-bounce" />
+           <Loader2 className="w-12 h-12 text-primary animate-spin" />
            <div className="text-lg text-muted-foreground font-medium">Loading Transactions...</div>
         </div>
       </div>
@@ -90,10 +60,28 @@ export default function TransactionsPage() {
         </Link>
       </div>
 
+      {/* Portfolio Filter */}
+      {portfolios.length > 1 && (
+        <div className="mb-6">
+          <div className="flex gap-2 flex-wrap">
+            {portfolios.map((p: Portfolio) => (
+              <Button
+                key={p.id}
+                variant={activePortfolioId === p.id ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedPortfolioId(p.id)}
+              >
+                {p.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && (
         <Card className="mb-6 border-destructive/50 bg-destructive/10">
           <CardContent className="pt-6">
-            <p className="text-destructive">{error}</p>
+            <p className="text-destructive">{error.message}</p>
           </CardContent>
         </Card>
       )}
@@ -131,7 +119,6 @@ export default function TransactionsPage() {
                 <thead>
                   <tr className="border-b border-white/10 text-left text-muted-foreground">
                     <th className="px-6 py-3 font-medium">Date</th>
-                    <th className="px-6 py-3 font-medium">Portfolio</th>
                     <th className="px-6 py-3 font-medium">Asset</th>
                     <th className="px-6 py-3 font-medium">Type</th>
                     <th className="px-6 py-3 font-medium">Quantity</th>
@@ -141,25 +128,17 @@ export default function TransactionsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {transactions.map((transaction) => (
+                  {transactions.map((transaction: Transaction) => (
                     <tr key={transaction.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 text-muted-foreground">
-                        {new Date(transaction.tradeTime).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Link
-                          href={`/portfolio/${transaction.portfolioId}`}
-                          className="hover:text-primary transition-colors hover:underline"
-                        >
-                          {transaction.portfolioName}
-                        </Link>
+                        {new Date(transaction.tradeTime || transaction.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-foreground">
-                          {transaction.assetSymbol}
+                          {transaction.assetSymbol || '—'}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {transaction.assetName}
+                          {transaction.assetName || ''}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -180,7 +159,7 @@ export default function TransactionsPage() {
                         })}
                       </td>
                       <td className="px-6 py-4 font-medium text-foreground">
-                        ${transaction.grossAmount.toLocaleString(undefined, { 
+                        ${(transaction.grossAmount || transaction.price * transaction.quantity).toLocaleString(undefined, { 
                           minimumFractionDigits: 2, 
                           maximumFractionDigits: 2 
                         })}
@@ -190,7 +169,13 @@ export default function TransactionsPage() {
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/70 hover:text-destructive hover:bg-destructive/10">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDelete(transaction.id)}
+                            disabled={deleteTransaction.isPending}
+                          >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>

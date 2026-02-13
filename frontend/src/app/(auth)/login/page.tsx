@@ -3,13 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/components/auth/auth-provider';
 import { apiClient } from '@/lib/api-client';
+import { toast } from 'sonner';
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { Button } from '@/components/ui/button';
 import { Mail, Lock, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,19 +24,19 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const result = await apiClient.login(email, password);
+      const result = await login(email, password);
       
       if (result.error) {
         setError(result.error);
+        toast.error(result.error);
         return;
       }
 
-      if (result.data) {
-        apiClient.setTokens(result.data.tokens);
-        router.push('/dashboard');
-      }
+      toast.success('Welcome back!');
+      router.push('/dashboard');
     } catch (err) {
       setError('An unexpected error occurred');
+      toast.error('An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -82,7 +85,7 @@ export default function LoginPage() {
             </label>
             <Link
               href="/forgot-password"
-              className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 font-medium transition-colors"
+              className="text-sm text-primary hover:text-primary/80 dark:text-primary/90 font-medium transition-colors"
             >
               Forgot password?
             </Link>
@@ -103,7 +106,7 @@ export default function LoginPage() {
 
         <Button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-10 transition-all duration-200 shadow-md hover:shadow-lg"
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10 transition-all duration-200 shadow-md hover:shadow-lg"
           disabled={isLoading}
         >
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -117,7 +120,7 @@ export default function LoginPage() {
         </span>
         <Link
           href="/register"
-          className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 transition-colors"
+          className="font-medium text-primary hover:text-primary/80 dark:text-primary/90 transition-colors"
         >
           Sign up
         </Link>

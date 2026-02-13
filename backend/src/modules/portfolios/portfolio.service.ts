@@ -107,28 +107,44 @@ export class PortfolioService {
   }
 
   async deletePortfolio(userId: bigint, portfolioId: bigint): Promise<void> {
-    // First verify portfolio exists and user owns it
     const portfolio = await prisma.portfolio.findFirst({
       where: { id: portfolioId, userId },
-      include: {
-        positions: true,
-        transactions: true,
-      },
     });
 
     if (!portfolio) {
       throw new NotFoundError('Portfolio not found');
     }
 
-    // Check if portfolio has positions or transactions
-    if (portfolio.positions.length > 0 || portfolio.transactions.length > 0) {
-      throw new Error('Cannot delete portfolio with positions or transactions. Remove them first.');
-    }
-
-    const oldValue = { ...portfolio };
-    
-    await prisma.portfolio.delete({
-      where: { id: portfolioId },
+    // Cascade delete all related data in a transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete notifications related to alerts on this portfolio
+      await tx.notification.deleteMany({
+        where: { alert: { portfolioId } },
+      });
+      // Delete alerts
+      await tx.alert.deleteMany({
+        where: { portfolioId },
+      });
+      // Delete snapshots
+      await tx.portfolioSnapshot.deleteMany({
+        where: { portfolioId },
+      });
+      // Delete transactions
+      await tx.transaction.deleteMany({
+        where: { portfolioId },
+      });
+      // Delete positions
+      await tx.position.deleteMany({
+        where: { portfolioId },
+      });
+      // Delete portfolio accounts
+      await tx.portfolioAccount.deleteMany({
+        where: { portfolioId },
+      });
+      // Delete portfolio
+      await tx.portfolio.delete({
+        where: { id: portfolioId },
+      });
     });
 
     // Log portfolio deletion
@@ -136,7 +152,7 @@ export class PortfolioService {
       userId,
       'PORTFOLIO',
       portfolioId,
-      oldValue
+      { name: portfolio.name }
     );
   }
 

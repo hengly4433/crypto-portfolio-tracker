@@ -1,82 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, LayoutGrid } from 'lucide-react';
-
-interface Portfolio {
-  id: string;
-  name: string;
-  baseCurrency: string;
-  totalValue?: number;
-  totalUnrealizedPnl?: number;
-  totalRealizedPnl?: number;
-}
+import { Plus, ArrowUpRight, TrendingUp, Wallet, LayoutGrid, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { usePortfolios, useCreatePortfolio } from '@/lib/hooks/use-portfolios';
+import { Portfolio } from '@/lib/api-client';
+import { toast } from 'sonner';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalValue, setTotalValue] = useState(0);
-  const [totalPnl, setTotalPnl] = useState(0);
+  const { data: portfolios = [], isLoading, error } = usePortfolios();
+  const createPortfolio = useCreatePortfolio();
 
-  useEffect(() => {
-    if (!apiClient.isAuthenticated()) {
-      router.push('/login');
-      return;
-    }
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newPortfolioName, setNewPortfolioName] = useState('');
 
-    loadPortfolios();
-  }, [router]);
-
-  const loadPortfolios = async () => {
-    try {
-      setIsLoading(true);
-      const result = await apiClient.getPortfolios();
-      
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-
-      if (result.data) {
-        setPortfolios(result.data);
-        
-        // Calculate totals
-        const totalVal = result.data.reduce((sum: number, p: any) => 
-          sum + (p.totalValue || 0), 0);
-        const totalPnlVal = result.data.reduce((sum: number, p: any) => 
-          sum + (p.totalUnrealizedPnl || 0) + (p.totalRealizedPnl || 0), 0);
-        
-        setTotalValue(totalVal);
-        setTotalPnl(totalPnlVal);
-      }
-    } catch (err) {
-      setError('Failed to load portfolios');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const totalValue = portfolios.reduce((sum: number, p: Portfolio) =>
+    sum + (p.totalValue || 0), 0);
+  const totalPnl = portfolios.reduce((sum: number, p: Portfolio) =>
+    sum + (p.totalUnrealizedPnl || 0) + (p.totalRealizedPnl || 0), 0);
 
   const handleCreatePortfolio = async () => {
-    const name = prompt('Enter portfolio name:');
-    if (!name) return;
-
+    if (!newPortfolioName.trim()) return;
     try {
-      const result = await apiClient.createPortfolio(name);
-      if (result.error) {
-        alert(result.error);
-        return;
-      }
-      loadPortfolios();
-    } catch (err) {
-      alert('Failed to create portfolio');
+      await createPortfolio.mutateAsync({ name: newPortfolioName });
+      setNewPortfolioName('');
+      setIsCreateOpen(false);
+      toast.success('Portfolio created successfully');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create portfolio');
     }
   };
 
@@ -98,14 +55,45 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-muted-foreground">Overview of your crypto assets and performance.</p>
         </div>
-        <Button onClick={handleCreatePortfolio} variant="glow" className="gap-2">
-          <Plus className="w-4 h-4" /> New Portfolio
-        </Button>
+        
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button variant="glow" className="gap-2">
+              <Plus className="w-4 h-4" /> New Portfolio
+            </Button>
+          </DialogTrigger>
+          <DialogContent variant="glass" className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Create Portfolio</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <input
+                  placeholder="Portfolio Name"
+                  value={newPortfolioName}
+                  onChange={(e) => setNewPortfolioName(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreatePortfolio();
+                  }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+              <Button variant="glow" onClick={handleCreatePortfolio} disabled={createPortfolio.isPending}>
+                {createPortfolio.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating...</>
+                ) : 'Create Portfolio'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {error && (
         <div className="mb-6 p-4 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg">
-          {error}
+          {error.message}
         </div>
       )}
 
@@ -173,13 +161,13 @@ export default function DashboardPage() {
             <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
               Create your first portfolio to start tracking your investments and analyzing your performance.
             </p>
-            <Button onClick={handleCreatePortfolio} variant="default">
+            <Button onClick={() => setIsCreateOpen(true)} variant="default">
               Create Portfolio
             </Button>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {portfolios.map((portfolio) => (
+            {portfolios.map((portfolio: Portfolio) => (
               <Card key={portfolio.id} variant="glass-hover" className="group cursor-pointer" onClick={() => router.push(`/portfolio/${portfolio.id}`)}>
                 <CardHeader className="pb-3">
                    <div className="flex justify-between items-start">

@@ -7,33 +7,34 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/auth-store';
+import { colors, borderRadius, spacing, shadows } from '../lib/theme';
 
-export default function LoginScreen({ navigation }: any) {
+interface Props {
+  navigation: any;
+}
+
+export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useAuthStore();
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-
     try {
       await login(email, password);
-      // Navigation will be handled by the auth state change
     } catch (err: any) {
       Alert.alert('Login Failed', err.message || 'An error occurred');
     }
-  };
-
-  const handleRegister = () => {
-    navigation.navigate('Register');
   };
 
   return (
@@ -41,71 +42,86 @@ export default function LoginScreen({ navigation }: any) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Crypto Portfolio Tracker</Text>
-          <Text style={styles.subtitle}>Sign in to manage your investments</Text>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+        {/* Logo Area */}
+        <View style={styles.logoArea}>
+          <View style={styles.logoIcon}>
+            <Ionicons name="analytics" size={36} color={colors.primary} />
+          </View>
+          <Text style={styles.appName}>CryptoTracker</Text>
+          <Text style={styles.tagline}>Track your portfolio like a pro</Text>
         </View>
 
-        <View style={styles.form}>
+        {/* Form Card */}
+        <View style={styles.formCard}>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to your account</Text>
+
           {error && (
             <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={16} color={colors.danger} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.textMuted}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+              />
+            </View>
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                placeholderTextColor={colors.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
-            style={styles.loginButton}
+            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
             onPress={handleLogin}
             disabled={isLoading}
+            activeOpacity={0.8}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.white} />
             ) : (
               <Text style={styles.loginButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.registerButton}
-            onPress={handleRegister}
+            onPress={() => navigation.navigate('Register')}
             disabled={isLoading}
+            style={styles.registerLink}
           >
-            <Text style={styles.registerButtonText}>
-              Don't have an account? Sign Up
+            <Text style={styles.registerLinkText}>
+              Don't have an account? <Text style={styles.registerLinkAccent}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Track your crypto portfolio across multiple exchanges
-          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -115,95 +131,128 @@ export default function LoginScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: spacing.xl,
   },
-  header: {
+  logoArea: {
     alignItems: 'center',
     marginBottom: 40,
   },
-  title: {
+  logoIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(91, 127, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  appName: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  tagline: {
+    fontSize: 14,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+  formCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.md,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  form: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.xxl,
   },
   errorContainer: {
-    backgroundColor: '#fee',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#f99',
+    backgroundColor: colors.dangerBg,
+    padding: spacing.md,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   errorText: {
-    color: '#c33',
-    textAlign: 'center',
+    color: colors.danger,
+    fontSize: 13,
+    flex: 1,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#444',
-    marginBottom: 8,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+  },
+  inputIcon: {
+    paddingLeft: spacing.md,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fafafa',
+    flex: 1,
+    padding: spacing.md,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  eyeButton: {
+    padding: spacing.md,
   },
   loginButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
+    ...shadows.glow(colors.primary),
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0,
   },
   loginButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  registerButton: {
-    padding: 16,
+  registerLink: {
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: 12,
   },
-  registerButtonText: {
-    color: '#007AFF',
+  registerLinkText: {
+    color: colors.textSecondary,
     fontSize: 14,
   },
-  footer: {
-    marginTop: 40,
-    alignItems: 'center',
-  },
-  footerText: {
-    color: '#888',
-    fontSize: 12,
-    textAlign: 'center',
+  registerLinkAccent: {
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

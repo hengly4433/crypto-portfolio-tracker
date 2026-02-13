@@ -95,6 +95,19 @@ export class PortfolioController {
     }
   };
 
+  deletePortfolio = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = BigInt(req.user!.userId);
+      const portfolioId = BigInt(req.params.id as string);
+      
+      await this.portfolioService.deletePortfolio(userId, portfolioId);
+      
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getTopPerformers = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = BigInt(req.user!.userId);

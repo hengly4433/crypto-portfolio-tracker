@@ -1,24 +1,29 @@
 import 'dotenv/config';
+import { createServer } from 'http';
 import app from './app';
 import { prisma } from './config/db';
 import { initializeAllJobs } from './infrastructure/jobs/job-manager';
+import { initializeWebSocket } from './infrastructure/websocket';
+import { logger } from './common/logger/logger';
 
 const PORT = process.env.PORT || 3001;
 
 async function main() {
   try {
-    // Test database connection
-    // await prisma.$connect();
-    // console.log('Connected to database');
+    // Create HTTP server from Express app
+    const httpServer = createServer(app);
+
+    // Initialize WebSocket
+    initializeWebSocket(httpServer);
 
     // Initialize scheduled jobs (price updates, alert checks, etc.)
     initializeAllJobs();
 
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+    httpServer.listen(PORT, () => {
+      logger.info(`Server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error(error, 'Failed to start server');
     process.exit(1);
   } finally {
     await prisma.$disconnect();

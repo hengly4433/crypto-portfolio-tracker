@@ -28,7 +28,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
       {/* Right Column - Hero */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-gray-900 relative overflow-hidden">
         {/* Abstract Background Elements */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-900 opacity-90" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary to-orange-900 opacity-90" />
         <div className="absolute top-0 right-0 w-full h-full bg-[url('https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop')] bg-cover bg-center mix-blend-overlay opacity-20" />
         
         {/* Content */}
@@ -56,17 +56,17 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
           <h2 className="text-4xl font-bold text-white leading-tight">
             Manage your crypto portfolio with confidence.
           </h2>
-          <p className="text-lg text-blue-100/90 leading-relaxed">
+          <p className="text-lg text-primary-foreground/90 leading-relaxed">
             Track real-time prices, manage your assets, and analyze your portfolio performance all in one place. Join thousands of users who trust us with their crypto journey.
           </p>
         </div>
         
-        <div className="relative z-10 flex items-center gap-4 text-sm text-blue-200/60">
+        <div className="relative z-10 flex items-center gap-4 text-sm text-primary-foreground/60">
             <span>© 2024 CryptoTracker Inc.</span>
             <span>•</span>
-            <Link href="#" className="hover:text-blue-200 transition-colors">Privacy Policy</Link>
+            <Link href="#" className="hover:text-primary-foreground transition-colors">Privacy Policy</Link>
             <span>•</span>
-            <Link href="#" className="hover:text-blue-200 transition-colors">Terms of Service</Link>
+            <Link href="#" className="hover:text-primary-foreground transition-colors">Terms of Service</Link>
         </div>
       </div>
     </div>

@@ -1,151 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Plus, Trash2, Wallet, TrendingUp, PieChart, History, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-
-interface Portfolio {
-  id: string;
-  name: string;
-  baseCurrency: string;
-  description?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Position {
-  id: string;
-  assetId: string;
-  assetSymbol: string;
-  assetName: string;
-  quantity: number;
-  avgPrice: number;
-  currentPrice: number;
-  marketValue: number;
-  unrealizedPnl: number;
-  realizedPnl: number;
-  pnlPercentage: number;
-}
-
-interface Transaction {
-  id: string;
-  side: string;
-  quantity: number;
-  price: number;
-  transactionCurrency: string;
-  grossAmount: number;
-  feeAmount: number;
-  tradeTime: string;
-  assetSymbol: string;
-  assetName: string;
-}
+import { ArrowLeft, Plus, Trash2, Wallet, TrendingUp, PieChart as PieChartIcon, Activity, Loader2, LineChart } from 'lucide-react';
+import { usePortfolio, usePortfolioSummary, usePortfolioPerformance, useDeletePortfolio } from '@/lib/hooks/use-portfolios';
+import { useTransactions } from '@/lib/hooks/use-transactions';
+import { AllocationChart } from '@/components/charts/allocation-chart';
+import { PerformanceChart } from '@/components/charts/performance-chart';
+import { toast } from 'sonner';
+import { PositionSummary, AllocationSlice } from '@/lib/api-client';
 
 export default function PortfolioDetailPage() {
   const router = useRouter();
   const params = useParams();
   const portfolioId = params.id as string;
 
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: portfolio, isLoading: loadingPortfolio, error: portfolioError } = usePortfolio(portfolioId);
+  const { data: summary, isLoading: loadingSummary } = usePortfolioSummary(portfolioId);
+  const { data: performance } = usePortfolioPerformance(portfolioId, 30);
+  const { data: txData } = useTransactions(portfolioId);
+  const deletePortfolio = useDeletePortfolio();
 
-  useEffect(() => {
-    if (!apiClient.isAuthenticated()) {
-      router.push('/login');
-      return;
-    }
+  const positions: PositionSummary[] = summary?.positions ?? [];
+  const allocation: AllocationSlice[] = summary?.allocation ?? [];
+  const transactions = txData?.data ?? (Array.isArray(txData) ? txData : []);
 
-    loadPortfolioData();
-  }, [portfolioId, router]);
-
-  const loadPortfolioData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load portfolio info
-      const portfolioResult = await apiClient.getPortfolio(portfolioId);
-      if (portfolioResult.error) {
-        setError(portfolioResult.error);
-        return;
-      }
-      setPortfolio(portfolioResult.data);
-
-      // Load summary
-      const summaryResult = await apiClient.getPortfolioSummary(portfolioId);
-      if (!summaryResult.error && summaryResult.data) {
-        setSummary(summaryResult.data);
-      }
-
-      // Load positions (we'll simulate for now since we don't have a positions endpoint)
-      await loadSimulatedPositions();
-
-      // Load transactions
-      const transactionsResult = await apiClient.getPortfolioTransactions(portfolioId);
-      if (!transactionsResult.error && transactionsResult.data) {
-        setTransactions(transactionsResult.data);
-      }
-
-    } catch (err) {
-      setError('Failed to load portfolio data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadSimulatedPositions = async () => {
-    // Simulated positions data - in a real app, you'd fetch from an API
-    const simulatedPositions: Position[] = [
-      {
-        id: '1',
-        assetId: '1',
-        assetSymbol: 'BTC',
-        assetName: 'Bitcoin',
-        quantity: 0.5,
-        avgPrice: 45000,
-        currentPrice: 52000,
-        marketValue: 26000,
-        unrealizedPnl: 3500,
-        realizedPnl: 1000,
-        pnlPercentage: 15.56,
-      },
-      {
-        id: '2',
-        assetId: '2',
-        assetSymbol: 'ETH',
-        assetName: 'Ethereum',
-        quantity: 3.2,
-        avgPrice: 3200,
-        currentPrice: 3500,
-        marketValue: 11200,
-        unrealizedPnl: 960,
-        realizedPnl: 450,
-        pnlPercentage: 9.38,
-      },
-      {
-        id: '3',
-        assetId: '3',
-        assetSymbol: 'SOL',
-        assetName: 'Solana',
-        quantity: 25,
-        avgPrice: 120,
-        currentPrice: 140,
-        marketValue: 3500,
-        unrealizedPnl: 500,
-        realizedPnl: 200,
-        pnlPercentage: 16.67,
-      },
-    ];
-    setPositions(simulatedPositions);
-  };
+  const totalValue = summary?.totalValue ?? 0;
+  const totalUnrealizedPnl = summary?.totalUnrealizedPnl ?? positions.reduce((sum: number, pos: PositionSummary) => sum + (pos.unrealizedPnl ?? 0), 0);
+  const totalRealizedPnl = summary?.totalRealizedPnl ?? positions.reduce((sum: number, pos: PositionSummary) => sum + (pos.realizedPnl ?? 0), 0);
 
   const handleAddTransaction = () => {
     router.push(`/transactions/new?portfolioId=${portfolioId}`);
@@ -155,29 +41,33 @@ export default function PortfolioDetailPage() {
     if (!confirm('Are you sure you want to delete this portfolio? This action cannot be undone.')) {
       return;
     }
-    
-    // In a real app, you would call apiClient.deletePortfolio(portfolioId)
-    alert('Portfolio deletion would be implemented here');
+    try {
+      await deletePortfolio.mutateAsync(portfolioId);
+      toast.success('Portfolio deleted');
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete portfolio');
+    }
   };
 
-  if (isLoading) {
+  if (loadingPortfolio || loadingSummary) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-pulse flex flex-col items-center gap-4">
-           <div className="w-12 h-12 bg-primary/20 rounded-full animate-bounce" />
+           <Loader2 className="w-12 h-12 text-primary animate-spin" />
            <div className="text-lg text-muted-foreground font-medium">Loading Portfolio...</div>
         </div>
       </div>
     );
   }
 
-  if (error || !portfolio) {
+  if (portfolioError || !portfolio) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen flex items-center justify-center">
         <Card className="w-full max-w-md border-destructive/50 bg-destructive/10">
           <CardContent className="pt-6 text-center">
             <h3 className="text-lg font-semibold text-destructive mb-2">Error Loading Portfolio</h3>
-            <p className="text-muted-foreground mb-4">{error || 'Portfolio not found'}</p>
+            <p className="text-muted-foreground mb-4">{portfolioError?.message || 'Portfolio not found'}</p>
             <Link href="/dashboard">
               <Button variant="outline">← Back to Dashboard</Button>
             </Link>
@@ -186,10 +76,6 @@ export default function PortfolioDetailPage() {
       </div>
     );
   }
-
-  const totalValue = positions.reduce((sum, pos) => sum + pos.marketValue, 0);
-  const totalUnrealizedPnl = positions.reduce((sum, pos) => sum + pos.unrealizedPnl, 0);
-  const totalRealizedPnl = positions.reduce((sum, pos) => sum + pos.realizedPnl, 0);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen space-y-8">
@@ -208,16 +94,13 @@ export default function PortfolioDetailPage() {
                {portfolio.baseCurrency}
              </Badge>
           </div>
-          <p className="mt-1 text-muted-foreground">
-            {portfolio.description}
-          </p>
         </div>
         <div className="flex space-x-3">
           <Button onClick={handleAddTransaction} variant="glow" className="gap-2">
             <Plus className="w-4 h-4" /> Add Transaction
           </Button>
-          <Button onClick={handleDeletePortfolio} variant="destructive" size="icon" title="Delete Portfolio">
-            <Trash2 className="w-4 h-4" />
+          <Button onClick={handleDeletePortfolio} variant="destructive" size="icon" title="Delete Portfolio" disabled={deletePortfolio.isPending}>
+            {deletePortfolio.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </Button>
         </div>
       </div>
@@ -263,7 +146,7 @@ export default function PortfolioDetailPage() {
         <Card variant="glass">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Assets</CardTitle>
-            <PieChart className="h-4 w-4 text-primary" />
+            <PieChartIcon className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -283,21 +166,69 @@ export default function PortfolioDetailPage() {
 
         <TabsContent value="overview">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Performance Chart */}
             <Card variant="glass">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LineChart className="h-5 w-5 text-primary" />
+                  Performance (30D)
+                </CardTitle>
+                <CardDescription>Portfolio value over the last 30 days</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PerformanceChart
+                  data={performance ?? []}
+                  baseCurrency={portfolio.baseCurrency}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Allocation Chart */}
+            <Card variant="glass">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChartIcon className="h-5 w-5 text-primary" />
+                  Allocation
+                </CardTitle>
+                <CardDescription>Asset distribution by value</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AllocationChart data={allocation} />
+                {allocation.length === 0 && positions.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    {positions.map((position: PositionSummary) => {
+                      const percentage = totalValue > 0 ? ((position.marketValue ?? 0) / totalValue) * 100 : 0;
+                      return (
+                        <div key={position.assetSymbol} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                             <div className="w-2 h-2 rounded-full bg-primary" />
+                             <span>{position.assetSymbol}</span>
+                          </div>
+                          <span className="text-muted-foreground">{percentage.toFixed(1)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Top Holdings */}
+            <Card variant="glass" className="lg:col-span-2">
              <CardHeader>
                <CardTitle>Top Holdings</CardTitle>
              </CardHeader>
              <CardContent>
                <div className="space-y-4">
-                  {positions.slice(0, 5).map((position) => (
-                    <div key={position.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
+                  {positions.slice(0, 5).map((position: PositionSummary) => (
+                    <div key={position.assetSymbol} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
                            {position.assetSymbol.slice(0,1)}
                         </div>
                         <div>
                           <div className="font-medium text-foreground">
-                            {position.assetName}
+                            {position.assetName || position.assetSymbol}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {position.quantity} {position.assetSymbol}
@@ -306,13 +237,13 @@ export default function PortfolioDetailPage() {
                       </div>
                       <div className="text-right">
                         <div className="font-medium">
-                          ${position.marketValue.toLocaleString(undefined, { 
+                          ${(position.marketValue ?? 0).toLocaleString(undefined, { 
                             minimumFractionDigits: 2, 
                             maximumFractionDigits: 2 
                           })}
                         </div>
-                        <div className={`text-sm font-medium ${position.pnlPercentage >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {position.pnlPercentage >= 0 ? '+' : ''}{position.pnlPercentage.toFixed(2)}%
+                        <div className={`text-sm font-medium ${(position.pnlPercentage ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {(position.pnlPercentage ?? 0) >= 0 ? '+' : ''}{(position.pnlPercentage ?? 0).toFixed(2)}%
                         </div>
                       </div>
                     </div>
@@ -320,35 +251,6 @@ export default function PortfolioDetailPage() {
                   {positions.length === 0 && <p className="text-muted-foreground text-center py-4">No positions yet</p>}
                 </div>
              </CardContent>
-            </Card>
-
-            <Card variant="glass">
-              <CardHeader>
-                <CardTitle>Allocation</CardTitle>
-                <CardDescription>Asset distribution by value</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <div className="flex items-center justify-center py-8">
-                     <div className="text-center text-muted-foreground">
-                        <PieChart className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                        <p>Visual allocation chart coming soon</p>
-                     </div>
-                  </div>
-                  <div className="space-y-2 mt-4">
-                     {positions.map((position) => {
-                       const percentage = totalValue > 0 ? (position.marketValue / totalValue) * 100 : 0;
-                       return (
-                         <div key={position.id} className="flex items-center justify-between text-sm">
-                           <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-primary" />
-                              <span>{position.assetSymbol}</span>
-                           </div>
-                           <span className="text-muted-foreground">{percentage.toFixed(1)}%</span>
-                         </div>
-                       );
-                     })}
-                  </div>
-              </CardContent>
             </Card>
           </div>
         </TabsContent>
@@ -371,24 +273,24 @@ export default function PortfolioDetailPage() {
                  <tbody className="divide-y divide-white/5">
                    {positions.length === 0 ? (
                       <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No positions found</td></tr>
-                   ) : positions.map((position) => (
-                     <tr key={position.id} className="hover:bg-white/5 transition-colors">
+                   ) : positions.map((position: PositionSummary) => (
+                     <tr key={position.assetSymbol} className="hover:bg-white/5 transition-colors">
                        <td className="px-6 py-4">
                          <div className="font-medium text-foreground">{position.assetSymbol}</div>
-                         <div className="text-xs text-muted-foreground">{position.assetName}</div>
+                         <div className="text-xs text-muted-foreground">{position.assetName || position.assetSymbol}</div>
                        </td>
                        <td className="px-6 py-4">{position.quantity}</td>
-                       <td className="px-6 py-4 text-muted-foreground">${position.avgPrice.toLocaleString()}</td>
-                       <td className="px-6 py-4">${position.currentPrice.toLocaleString()}</td>
-                       <td className="px-6 py-4 font-medium">${position.marketValue.toLocaleString()}</td>
+                       <td className="px-6 py-4 text-muted-foreground">${(position.avgPrice ?? 0).toLocaleString()}</td>
+                       <td className="px-6 py-4">${(position.currentPrice ?? 0).toLocaleString()}</td>
+                       <td className="px-6 py-4 font-medium">${(position.marketValue ?? 0).toLocaleString()}</td>
                        <td className="px-6 py-4">
-                          <span className={position.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}>
-                             ${position.unrealizedPnl.toLocaleString()}
+                          <span className={(position.unrealizedPnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}>
+                             ${(position.unrealizedPnl ?? 0).toLocaleString()}
                           </span>
                        </td>
                        <td className="px-6 py-4">
-                          <Badge variant={position.pnlPercentage >= 0 ? 'success' : 'destructive'}>
-                             {position.pnlPercentage.toFixed(2)}%
+                          <Badge variant={(position.pnlPercentage ?? 0) >= 0 ? 'success' : 'destructive'}>
+                             {(position.pnlPercentage ?? 0).toFixed(2)}%
                           </Badge>
                        </td>
                      </tr>
@@ -422,19 +324,19 @@ export default function PortfolioDetailPage() {
                  <tbody className="divide-y divide-white/5">
                    {transactions.length === 0 ? (
                       <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No transactions recorded yet</td></tr>
-                   ) : transactions.map((tx) => (
+                   ) : transactions.map((tx: any) => (
                      <tr key={tx.id} className="hover:bg-white/5 transition-colors">
-                       <td className="px-6 py-4 text-muted-foreground">{new Date(tx.tradeTime).toLocaleDateString()}</td>
+                       <td className="px-6 py-4 text-muted-foreground">{new Date(tx.tradeTime || tx.createdAt).toLocaleDateString()}</td>
                        <td className="px-6 py-4">
                           <Badge variant={tx.side === 'BUY' ? 'success' : tx.side === 'SELL' ? 'destructive' : 'secondary'}>
                              {tx.side}
                           </Badge>
                        </td>
-                       <td className="px-6 py-4 font-medium">{tx.assetSymbol}</td>
+                       <td className="px-6 py-4 font-medium">{tx.assetSymbol || tx.asset?.symbol || '—'}</td>
                        <td className="px-6 py-4">{tx.quantity}</td>
-                       <td className="px-6 py-4 text-muted-foreground">${tx.price.toLocaleString()}</td>
-                       <td className="px-6 py-4 font-medium">${tx.grossAmount.toLocaleString()}</td>
-                       <td className="px-6 py-4 text-xs text-muted-foreground">${tx.feeAmount}</td>
+                       <td className="px-6 py-4 text-muted-foreground">${(tx.price || 0).toLocaleString()}</td>
+                       <td className="px-6 py-4 font-medium">${(tx.grossAmount || tx.price * tx.quantity || 0).toLocaleString()}</td>
+                       <td className="px-6 py-4 text-xs text-muted-foreground">${tx.feeAmount || 0}</td>
                      </tr>
                    ))}
                  </tbody>

@@ -10,9 +10,8 @@ export class TransactionController {
 
   createTransaction = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // portfolioId from params, assetId from body
       const portfolioId = BigInt(req.params.portfolioId as string);
-      const { assetId, side, quantity, price, transactionCurrency, date } = req.body;
+      const { assetId, side, quantity, price, transactionCurrency, date, userAccountId, feeAmount, feeCurrency, note } = req.body;
       
       const transaction = await this.transactionService.createTransaction({
         portfolioId,
@@ -22,6 +21,10 @@ export class TransactionController {
         price,
         transactionCurrency,
         date: new Date(date),
+        userAccountId: userAccountId ? BigInt(userAccountId) : undefined,
+        feeAmount,
+        feeCurrency,
+        note,
       });
 
       const response = JSON.parse(JSON.stringify(transaction, (key, value) =>
@@ -36,12 +39,28 @@ export class TransactionController {
   getPortfolioTransactions = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const portfolioId = BigInt(req.params.portfolioId as string);
-      const transactions = await this.transactionService.getTransactions(portfolioId);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
 
-      const response = JSON.parse(JSON.stringify(transactions, (key, value) =>
+      const result = await this.transactionService.getTransactionsPaginated(portfolioId, page, limit);
+
+      const response = JSON.parse(JSON.stringify(result, (key, value) =>
         typeof value === 'bigint' ? value.toString() : value
       ));
       res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deleteTransaction = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const portfolioId = BigInt(req.params.portfolioId as string);
+      const transactionId = BigInt(req.params.transactionId as string);
+
+      await this.transactionService.deleteTransaction(transactionId, portfolioId);
+
+      res.status(204).send();
     } catch (error) {
       next(error);
     }

@@ -513,6 +513,38 @@ export class TransactionService {
   }
 
   /**
+   * Get paginated transactions for a portfolio
+   */
+  async getTransactionsPaginated(portfolioId: bigint, page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { portfolioId },
+        orderBy: { tradeTime: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          asset: true,
+          userAccount: {
+            include: { exchange: true },
+          },
+        },
+      }),
+      prisma.transaction.count({ where: { portfolioId } }),
+    ]);
+
+    return {
+      data: transactions,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
    * Get transaction by ID
    */
   async getTransactionById(transactionId: bigint): Promise<Transaction | null> {
@@ -533,38 +565,24 @@ export class TransactionService {
   /**
    * Delete transaction (and reverse position changes)
    */
-  async deleteTransaction(transactionId: bigint): Promise<void> {
+  async deleteTransaction(transactionId: bigint, portfolioId: bigint): Promise<void> {
     await prisma.$transaction(async (tx) => {
-      // First get the transaction details
       const transaction = await tx.transaction.findUnique({
         where: { id: transactionId },
-        include: {
-          portfolio: true,
-        },
+        include: { portfolio: true },
       });
 
       if (!transaction) {
         throw new BadRequestError('Transaction not found');
       }
 
-      // Find the associated position
-      const position = await tx.position.findFirst({
-        where: {
-          assetId: transaction.assetId,
-          portfolioId: transaction.portfolioId,
-          userAccountId: transaction.userAccountId,
-        },
-      });
+      if (transaction.portfolioId !== portfolioId) {
+        throw new BadRequestError('Transaction does not belong to this portfolio');
+      }
 
-      // Note: In a production system, we would need to properly reverse the transaction
-      // by recalculating the position history. For MVP, we'll just delete the transaction
-      // and require the user to manually correct the position if needed.
-      
       await tx.transaction.delete({
         where: { id: transactionId },
       });
-
-      console.warn(`Transaction ${transactionId} deleted. Position may need manual correction.`);
     });
   }
 }

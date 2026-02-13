@@ -22,5 +22,6 @@ router.get('/:id', portfolioController.getPortfolioById);
 router.get('/:id/summary', portfolioController.getPortfolioSummary);
 router.get('/:id/performance', portfolioController.getPortfolioPerformance);
 router.get('/:id/top-performers', portfolioController.getTopPerformers);
+router.delete('/:id', portfolioController.deletePortfolio);
 
 export default router;

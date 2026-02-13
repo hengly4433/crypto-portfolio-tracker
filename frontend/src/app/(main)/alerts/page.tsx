@@ -1,49 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Bell, TrendingUp, TrendingDown, Target, Activity, Trash2, Power, Eye, EyeOff } from 'lucide-react';
-
-interface Alert {
-  id: string;
-  portfolioId?: string;
-  portfolioName?: string;
-  assetId?: string;
-  assetSymbol?: string;
-  assetName?: string;
-  alertType: string;
-  conditionValue: number;
-  lookbackWindowMinutes?: number;
-  isActive: boolean;
-  lastTriggeredAt?: string;
-  createdAt: string;
-}
-
-interface Portfolio {
-  id: string;
-  name: string;
-}
-
-interface Asset {
-  id: string;
-  symbol: string;
-  name: string;
-}
+import { Bell, TrendingUp, TrendingDown, Target, Activity, Trash2, Eye, EyeOff, Wallet, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { useAlerts, useCreateAlert, useUpdateAlert, useDeleteAlert } from '@/lib/hooks/use-alerts';
+import { usePortfolios } from '@/lib/hooks/use-portfolios';
+import { useAssets } from '@/lib/hooks/use-assets';
+import { Alert, Portfolio, Asset } from '@/lib/api-client';
 
 export default function AlertsPage() {
-  const router = useRouter();
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const { data: alerts = [], isLoading } = useAlerts();
+  const { data: portfolios = [] } = usePortfolios();
+  const { data: assets = [] } = useAssets();
+  const createAlert = useCreateAlert();
+  const updateAlert = useUpdateAlert();
+  const deleteAlert = useDeleteAlert();
 
-  // Form state - in a real app, extract this to a separate component
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [alertToDelete, setAlertToDelete] = useState<string | null>(null);
+
+  // Form state
   const [portfolioId, setPortfolioId] = useState('');
   const [assetId, setAssetId] = useState('');
   const [alertType, setAlertType] = useState('PRICE_ABOVE');
@@ -51,90 +31,33 @@ export default function AlertsPage() {
   const [lookbackWindowMinutes, setLookbackWindowMinutes] = useState('');
   const [isActive, setIsActive] = useState(true);
 
-  useEffect(() => {
-    if (!apiClient.isAuthenticated()) {
-      router.push('/login');
-      return;
-    }
-
-    loadData();
-  }, [router]);
-
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load data in parallel
-      const [portfoliosResult, assetsResult, alertsResult] = await Promise.all([
-        apiClient.getPortfolios(),
-        apiClient.getAssets(),
-        apiClient.getAlerts()
-      ]);
-
-      if (!portfoliosResult.error && portfoliosResult.data) {
-        setPortfolios(portfoliosResult.data);
-        if (portfoliosResult.data.length > 0) {
-          setPortfolioId(portfoliosResult.data[0].id);
-        }
-      }
-
-      if (!assetsResult.error && assetsResult.data) {
-        setAssets(assetsResult.data);
-         if (assetsResult.data.length > 0) {
-          setAssetId(assetsResult.data[0].id);
-        }
-      }
-
-      if (!alertsResult.error && alertsResult.data) {
-        setAlerts(alertsResult.data);
-      } else if (alertsResult.error) {
-        // Only set error if alerts fail, as others might just be empty
-        // setError(alertsResult.error);
-      }
-
-    } catch (err) {
-      setError('Failed to load data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!conditionValue) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
 
     try {
-      const alertData = {
+      await createAlert.mutateAsync({
         portfolioId: portfolioId || undefined,
         assetId: assetId || undefined,
         alertType,
         conditionValue: parseFloat(conditionValue),
         lookbackWindowMinutes: lookbackWindowMinutes ? parseInt(lookbackWindowMinutes) : undefined,
         isActive,
-      };
-
-      const result = await apiClient.createAlert(alertData);
-      if (result.error) {
-        alert(`Error: ${result.error}`);
-        return;
-      }
-
-      alert('Alert created successfully!');
+      });
+      toast.success('Alert created successfully!');
       setShowAddForm(false);
       resetForm();
-      loadData();
-    } catch (err) {
-      alert('Failed to create alert');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create alert');
     }
   };
 
   const resetForm = () => {
-    setPortfolioId(portfolios.length > 0 ? portfolios[0].id : '');
-    setAssetId(assets.length > 0 ? assets[0].id : '');
+    setPortfolioId('');
+    setAssetId('');
     setAlertType('PRICE_ABOVE');
     setConditionValue('');
     setLookbackWindowMinutes('');
@@ -143,29 +66,23 @@ export default function AlertsPage() {
 
   const handleToggleAlert = async (alertId: string, currentStatus: boolean) => {
     try {
-      // simulate optimistic update
-      setAlerts(alerts.map(a => a.id === alertId ? { ...a, isActive: !currentStatus } : a));
-       
-      // In a real app, you would call apiClient.updateAlert(alertId, { isActive: !currentStatus })
-      // loadData(); // Reload to confirm
-    } catch (err) {
-      // Revert on error
-      loadData();
-      alert('Failed to update alert');
+      await updateAlert.mutateAsync({ id: alertId, data: { isActive: !currentStatus } });
+      toast.success(`Alert ${currentStatus ? 'disabled' : 'enabled'}`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update alert');
     }
   };
 
-  const handleDeleteAlert = async (alertId: string) => {
-    if (!confirm('Are you sure you want to delete this alert?')) {
-      return;
+  const handleDeleteAlert = async () => {
+    if (!alertToDelete) return;
+    try {
+      await deleteAlert.mutateAsync(alertToDelete);
+      toast.success('Alert deleted');
+      setAlertToDelete(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete alert');
+      setAlertToDelete(null);
     }
-    
-    // Optimistic update
-    setAlerts(alerts.filter(a => a.id !== alertId));
-
-    // In a real app, you would call apiClient.deleteAlert(alertId)
-    // alert('Alert deletion would be implemented here');
-    // loadData();
   };
 
   const getAlertTypeLabel = (type: string) => {
@@ -194,7 +111,7 @@ export default function AlertsPage() {
     return (
       <div className="flex justify-center items-center min-h-screen">
          <div className="animate-pulse flex flex-col items-center gap-4">
-           <div className="w-12 h-12 bg-primary/20 rounded-full animate-bounce" />
+           <Loader2 className="w-12 h-12 text-primary animate-spin" />
            <div className="text-lg text-muted-foreground font-medium">Loading Alerts...</div>
         </div>
       </div>
@@ -219,15 +136,7 @@ export default function AlertsPage() {
         </Button>
       </div>
 
-      {error && (
-        <Card className="mb-6 border-destructive/50 bg-destructive/10">
-          <CardContent className="pt-6">
-            <p className="text-destructive">{error}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Add Alert Form - Inline for now */}
+      {/* Add Alert Form */}
       {showAddForm && (
         <Card variant="glass" className="mb-8 border-primary/20 animate-fade-in-up">
           <CardHeader>
@@ -273,7 +182,7 @@ export default function AlertsPage() {
                     className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="" className="bg-background text-foreground">Select Portfolio</option>
-                    {portfolios.map((portfolio) => (
+                    {portfolios.map((portfolio: Portfolio) => (
                       <option key={portfolio.id} value={portfolio.id} className="bg-background text-foreground">
                         {portfolio.name}
                       </option>
@@ -289,7 +198,7 @@ export default function AlertsPage() {
                     className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="" className="bg-background text-foreground">Select Asset</option>
-                    {assets.map((asset) => (
+                    {assets.map((asset: Asset) => (
                       <option key={asset.id} value={asset.id} className="bg-background text-foreground">
                         {asset.symbol} - {asset.name}
                       </option>
@@ -312,8 +221,10 @@ export default function AlertsPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button type="submit" variant="glow">
-                  Create Alert
+                <Button type="submit" variant="glow" disabled={createAlert.isPending}>
+                  {createAlert.isPending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating...</>
+                  ) : 'Create Alert'}
                 </Button>
               </div>
             </form>
@@ -325,9 +236,28 @@ export default function AlertsPage() {
       <Card variant="glass">
         <CardHeader>
             <CardTitle className="text-xl">Active Alerts</CardTitle>
-            <CardDescription>{alerts.filter(a => a.isActive).length} alerts currently monitoring the market</CardDescription>
+            <CardDescription>{alerts.filter((a: Alert) => a.isActive).length} alerts currently monitoring the market</CardDescription>
         </CardHeader>
         <CardContent>
+             {/* Delete Confirmation Dialog */}
+            <Dialog open={!!alertToDelete} onOpenChange={(open) => !open && setAlertToDelete(null)}>
+              <DialogContent variant="glass">
+                <DialogHeader>
+                  <DialogTitle>Delete Alert</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this alert? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setAlertToDelete(null)}>Cancel</Button>
+                  <Button variant="destructive" onClick={handleDeleteAlert} disabled={deleteAlert.isPending}>
+                    {deleteAlert.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {alerts.length === 0 ? (
                 <div className="py-12 text-center flex flex-col items-center justify-center">
                     <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mb-4">
@@ -354,7 +284,7 @@ export default function AlertsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {alerts.map((alert) => (
+                            {alerts.map((alert: Alert) => (
                                 <tr key={alert.id} className="hover:bg-white/5 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
@@ -392,13 +322,14 @@ export default function AlertsPage() {
                                                 onClick={() => handleToggleAlert(alert.id, alert.isActive)}
                                                 className={alert.isActive ? "text-yellow-500 hover:text-yellow-600" : "text-green-500 hover:text-green-600"}
                                                 title={alert.isActive ? "Disable Rule" : "Enable Rule"}
+                                                disabled={updateAlert.isPending}
                                             >
                                                 {alert.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </Button>
                                             <Button 
                                                 variant="ghost" 
                                                 size="icon"
-                                                onClick={() => handleDeleteAlert(alert.id)}
+                                                onClick={() => setAlertToDelete(alert.id)}
                                                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                             >
                                                 <Trash2 className="w-4 h-4" />

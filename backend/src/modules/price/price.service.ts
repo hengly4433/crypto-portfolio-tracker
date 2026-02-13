@@ -1,19 +1,55 @@
 import axios from 'axios';
 import { prisma } from '../../config/db';
-import { PriceSpot } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import { getRedisConnection } from '../../config/redis';
+import { createModuleLogger } from '../../common/logger/logger';
 
-// External API configuration
+const log = createModuleLogger('price');
+
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
 const ALPHA_VANTAGE_API_URL = 'https://www.alphavantage.co/query';
+
+// Redis cache TTL in seconds
+const PRICE_CACHE_TTL = 60; // 1 minute
+const FX_CACHE_TTL = 300; // 5 minutes
 
 export class PriceService {
   private coingeckoApiKey: string;
   private alphaVantageApiKey: string;
+  private redis: ReturnType<typeof getRedisConnection> | null = null;
 
   constructor() {
     this.coingeckoApiKey = process.env.COINGECKO_API_KEY || '';
     this.alphaVantageApiKey = process.env.ALPHA_VANTAGE_API_KEY || '';
+    try {
+      this.redis = getRedisConnection();
+    } catch {
+      log.warn('Redis not available, price caching disabled');
+    }
+  }
+
+  /**
+   * Get cached value from Redis
+   */
+  private async getCached(key: string): Promise<string | null> {
+    if (!this.redis) return null;
+    try {
+      return await this.redis.get(key);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Set cached value in Redis
+   */
+  private async setCache(key: string, value: string, ttl: number): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.setex(key, ttl, value);
+    } catch {
+      // Silently fail cache set
+    }
   }
 
   /**
@@ -35,7 +71,7 @@ export class PriceService {
 
       return price;
     } catch (error) {
-      console.error(`Error fetching crypto price for ${coingeckoId}:`, error);
+      log.error({ coingeckoId, quoteCurrency, error }, 'Error fetching crypto price');
       throw error;
     }
   }
@@ -65,7 +101,7 @@ export class PriceService {
 
       return parseFloat(rate);
     } catch (error) {
-      console.error(`Error fetching forex rate for ${fromCurrency} to ${toCurrency}:`, error);
+      log.error({ fromCurrency, toCurrency, error }, 'Error fetching forex rate');
       throw error;
     }
   }
@@ -75,28 +111,31 @@ export class PriceService {
    */
   async fetchGoldPrice(quoteCurrency: string = 'USD'): Promise<number> {
     try {
-      // Alpha Vantage doesn't have direct gold API, but we can use metal APIs or fallback
-      // For now, we'll use a placeholder or implement with alternative API
-      // Using Forex API with XAU as currency code (not always supported)
       return this.fetchForexRate('XAU', quoteCurrency);
     } catch (error) {
-      console.error(`Error fetching gold price:`, error);
-      // Fallback to hardcoded approximate price if API fails
-      return 2000; // Approximate gold price per ounce in USD
+      log.error({ quoteCurrency, error }, 'Error fetching gold price');
+      return 2000;
     }
   }
 
   /**
-   * Get or fetch price for an asset
+   * Get or fetch price for an asset with Redis caching
    */
   async getPrice(assetId: bigint, quoteCurrency: string): Promise<Prisma.Decimal> {
-    // First check if we have a recent price in cache/database
+    // Check Redis cache first
+    const cacheKey = `price:${assetId}:${quoteCurrency}`;
+    const cached = await this.getCached(cacheKey);
+    if (cached) {
+      return new Prisma.Decimal(cached);
+    }
+
+    // Check database for recent price
     const recentPrice = await prisma.priceSpot.findFirst({
       where: {
         assetId,
         quoteCurrency,
         fetchedAt: {
-          gte: new Date(Date.now() - 5 * 60 * 1000), // Within last 5 minutes
+          gte: new Date(Date.now() - 5 * 60 * 1000),
         },
       },
       orderBy: {
@@ -105,6 +144,8 @@ export class PriceService {
     });
 
     if (recentPrice) {
+      // Cache in Redis
+      await this.setCache(cacheKey, recentPrice.price.toString(), PRICE_CACHE_TTL);
       return recentPrice.price;
     }
 
@@ -127,12 +168,12 @@ export class PriceService {
         price = await this.fetchCryptoPrice(asset.coingeckoId, quoteCurrency.toLowerCase());
         break;
 
-      case 'FOREX':
-        // For forex pairs, we need to parse symbol like "EURUSD"
+      case 'FOREX': {
         const base = asset.symbol.substring(0, 3);
         const quote = asset.symbol.substring(3, 6);
         price = await this.fetchForexRate(base, quote);
         break;
+      }
 
       case 'COMMODITY':
         if (asset.symbol === 'XAUUSD' || asset.symbol === 'XAU') {
@@ -143,7 +184,6 @@ export class PriceService {
         break;
 
       case 'FIAT':
-        // For fiat currencies, get rate vs USD (or other base)
         if (asset.symbol === 'USD') {
           price = 1;
         } else {
@@ -166,6 +206,9 @@ export class PriceService {
       },
     });
 
+    // Cache in Redis
+    await this.setCache(cacheKey, priceDecimal.toString(), PRICE_CACHE_TTL);
+
     return priceDecimal;
   }
 
@@ -181,36 +224,39 @@ export class PriceService {
       throw new Error(`Asset not found with id: ${assetId}`);
     }
 
-    // Determine the quote currency for this asset
     let quoteCurrency = 'USD';
     if (asset.quoteCurrency) {
       quoteCurrency = asset.quoteCurrency;
     } else if (asset.assetType === 'CRYPTO') {
-      quoteCurrency = 'USDT'; // Default for crypto
+      quoteCurrency = 'USDT';
     }
 
-    // Get price in quote currency
     const priceInQuote = await this.getPrice(assetId, quoteCurrency);
 
-    // If quote currency equals base currency, no conversion needed
     if (quoteCurrency === baseCurrency) {
       return priceInQuote;
     }
 
-    // Convert to base currency using FX rate
     const fxRate = await this.getFxRate(quoteCurrency, baseCurrency);
     return priceInQuote.mul(fxRate);
   }
 
   /**
-   * Get FX rate between two currencies
+   * Get FX rate between two currencies with Redis caching
    */
   async getFxRate(fromCurrency: string, toCurrency: string): Promise<Prisma.Decimal> {
     if (fromCurrency === toCurrency) {
       return new Prisma.Decimal(1);
     }
 
-    // Check for cached rate
+    // Check Redis cache
+    const cacheKey = `fx:${fromCurrency}:${toCurrency}`;
+    const cached = await this.getCached(cacheKey);
+    if (cached) {
+      return new Prisma.Decimal(cached);
+    }
+
+    // Check database
     const cachedRate = await prisma.priceSpot.findFirst({
       where: {
         asset: {
@@ -230,6 +276,7 @@ export class PriceService {
     });
 
     if (cachedRate) {
+      await this.setCache(cacheKey, cachedRate.price.toString(), FX_CACHE_TTL);
       return cachedRate.price;
     }
 
@@ -269,6 +316,9 @@ export class PriceService {
       },
     });
 
+    // Cache in Redis
+    await this.setCache(cacheKey, rateDecimal.toString(), FX_CACHE_TTL);
+
     return rateDecimal;
   }
 
@@ -290,9 +340,9 @@ export class PriceService {
         }
 
         await this.getPrice(asset.id, quoteCurrency);
-        console.log(`Updated price for ${asset.symbol}`);
+        log.debug({ symbol: asset.symbol }, 'Updated price');
       } catch (error) {
-        console.error(`Failed to update price for ${asset.symbol}:`, error);
+        log.error({ symbol: asset.symbol, error }, 'Failed to update price');
       }
     });
 
