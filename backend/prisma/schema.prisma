@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AssetType {
+  CRYPTO
+  FOREX
+  COMMODITY
+  FIAT
+}
+
+enum MarketType {
+  SPOT
+  DERIVATIVE
+  FOREX
+  METAL
+}
+
+enum ExchangeType {
+  CEX
+  DEX
+  WALLET
+  BROKER
+}
+
+enum AccountType {
+  SPOT
+  FUTURES
+  MARGIN
+  WALLET
+}
+
+enum TransactionSide {
+  BUY
+  SELL
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER_IN
+  TRANSFER_OUT
+  INCOME
+  FEE
+}
+
+enum AlertType {
+  PRICE_ABOVE
+  PRICE_BELOW
+  PERCENT_CHANGE
+  PORTFOLIO_DRAWDOWN
+  TARGET_PNL
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  TELEGRAM
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id           BigInt    @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  fullName     String?   @map("full_name")
+  country      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+  isActive     Boolean   @default(true) @map("is_active")
+
+  sessions     UserSession[]
+  settings     UserSettings?
+  portfolios   Portfolio[]
+  accounts     UserAccount[]
+  apiKeys      UserApiKey[]
+  alerts       Alert[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt    @map("user_id")
+  jwtId     String    @map("jwt_id") @db.Uuid
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("user_sessions")
+}
+
+model UserSettings {
+  id           BigInt   @id @default(autoincrement())
+  userId       BigInt   @unique @map("user_id")
+  baseCurrency String   @default("USD") @map("base_currency")
+  timezone     String   @default("UTC")
+  locale       String   @default("en-US")
+  darkMode     Boolean  @default(false) @map("dark_mode")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("user_settings")
+}
+
+model Asset {
+  id              BigInt    @id @default(autoincrement())
+  symbol          String
+  name            String
+  assetType       AssetType @default(CRYPTO) @map("asset_type")
+  baseCurrency    String?   @map("base_currency") // e.g. "BTC"
+  quoteCurrency   String?   @map("quote_currency") // e.g. "USDT"
+  coingeckoId     String?   @map("coingecko_id")
+  externalSymbol  String?   @map("external_symbol")
+  precision       Int       @default(8)
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  markets         Market[]
+  positions       Position[]
+  transactions    Transaction[]
+  prices          PriceSpot[]
+  candles         Candle[]
+  alerts          Alert[]
+
+  @@map("assets")
+}
+
+model Market {
+  id                   BigInt     @id @default(autoincrement())
+  assetId              BigInt     @map("asset_id")
+  marketType           MarketType @default(SPOT) @map("market_type")
+  defaultQuoteCurrency String     @map("default_quote_currency")
+  isDefault            Boolean    @default(false) @map("is_default")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@map("markets")
+}
+
+model Exchange {
+  id         BigInt       @id @default(autoincrement())
+  name       String
+  code       String
+  type       ExchangeType
+  websiteUrl String?      @map("website_url")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  userAccounts UserAccount[]
+  apiKeys      UserApiKey[]
+
+  @@map("exchanges")
+}
+
+model UserAccount {
+  id           BigInt      @id @default(autoincrement())
+  userId       BigInt      @map("user_id")
+  exchangeId   BigInt      @map("exchange_id")
+  name         String
+  accountType  AccountType @default(SPOT) @map("account_type")
+  baseCurrency String      @default("USD") @map("base_currency")
+  isDefault    Boolean     @default(false) @map("is_default")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id])
+  exchange          Exchange           @relation(fields: [exchangeId], references: [id])
+  portfolioAccounts PortfolioAccount[]
+  positions         Position[]
+  transactions      Transaction[]
+
+  @@map("user_accounts")
+}
+
+model UserApiKey {
+  id                  BigInt   @id @default(autoincrement())
+  userId              BigInt   @map("user_id")
+  exchangeId          BigInt   @map("exchange_id")
+  label               String?
+  apiKeyEncrypted     String   @map("api_key_encrypted")
+  apiSecretEncrypted  String   @map("api_secret_encrypted")
+  passphraseEncrypted String?  @map("passphrase_encrypted")
+  isReadOnly          Boolean  @default(true) @map("is_read_only")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id])
+  exchange Exchange @relation(fields: [exchangeId], references: [id])
+
+  @@map("user_api_keys")
+}
+
+model Portfolio {
+  id           BigInt   @id @default(autoincrement())
+  userId       BigInt   @map("user_id")
+  name         String
+  baseCurrency String   @default("USD") @map("base_currency")
+  description  String?
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user      User               @relation(fields: [userId], references: [id])
+  accounts  PortfolioAccount[]
+  positions Position[]
+  transactions Transaction[]
+  snapshots PortfolioSnapshot[]
+  alerts    Alert[]
+
+  @@map("portfolios")
+}
+
+model PortfolioAccount {
+  id            BigInt   @id @default(autoincrement())
+  portfolioId   BigInt   @map("portfolio_id")
+  userAccountId BigInt   @map("user_account_id")
+  weight        Decimal? @db.Decimal(5, 2)
+
+  portfolio   Portfolio   @relation(fields: [portfolioId], references: [id])
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+
+  @@map("portfolio_accounts")
+}
+
+model Position {
+  id            BigInt   @id @default(autoincrement())
+  portfolioId   BigInt   @map("portfolio_id")
+  assetId       BigInt   @map("asset_id")
+  userAccountId BigInt?  @map("user_account_id")
+  quantity      Decimal  @db.Decimal(20, 8)
+  costBasis     Decimal  @map("cost_basis") @db.Decimal(20, 8)
+  avgPrice      Decimal  @map("avg_price") @db.Decimal(20, 8)
+  realizedPnl   Decimal  @default(0) @map("realized_pnl") @db.Decimal(20, 8)
+  unrealizedPnl Decimal  @default(0) @map("unrealized_pnl") @db.Decimal(20, 8)
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+
+  portfolio   Portfolio    @relation(fields: [portfolioId], references: [id])
+  asset       Asset        @relation(fields: [assetId], references: [id])
+  userAccount UserAccount? @relation(fields: [userAccountId], references: [id])
+
+  @@unique([portfolioId, assetId, userAccountId])
+  @@map("positions")
+}
+
+model Transaction {
+  id                  BigInt          @id @default(autoincrement())
+  portfolioId         BigInt          @map("portfolio_id")
+  userAccountId       BigInt          @map("user_account_id")
+  assetId             BigInt          @map("asset_id")
+  side                TransactionSide
+  quantity            Decimal         @db.Decimal(20, 8)
+  price               Decimal         @db.Decimal(20, 8)
+  transactionCurrency String          @map("transaction_currency")
+  grossAmount         Decimal         @map("gross_amount") @db.Decimal(20, 8)
+  feeAmount           Decimal         @default(0) @map("fee_amount") @db.Decimal(20, 8)
+  feeCurrency         String?         @map("fee_currency")
+  tradeTime           DateTime        @map("trade_time")
+  tradeIdExternal     String?         @map("trade_id_external")
+  note                String?
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  portfolio   Portfolio   @relation(fields: [portfolioId], references: [id])
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+  asset       Asset       @relation(fields: [assetId], references: [id])
+
+  @@map("transactions")
+}
+
+model PriceSpot {
+  id            BigInt   @id @default(autoincrement())
+  assetId       BigInt   @map("asset_id")
+  quoteCurrency String   @map("quote_currency")
+  price         Decimal  @db.Decimal(20, 8)
+  source        String?
+  fetchedAt     DateTime @default(now()) @map("fetched_at")
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@map("prices_spot")
+}
+
+model Candle {
+  id        BigInt   @id @default(autoincrement())
+  assetId   BigInt   @map("asset_id")
+  timeframe String
+  open      Decimal  @db.Decimal(20, 8)
+  high      Decimal  @db.Decimal(20, 8)
+  low       Decimal  @db.Decimal(20, 8)
+  close     Decimal  @db.Decimal(20, 8)
+  volume    Decimal  @db.Decimal(20, 8)
+  openTime  DateTime @map("open_time")
+  closeTime DateTime @map("close_time")
+  source    String?
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@unique([assetId, timeframe, openTime])
+  @@map("candles")
+}
+
+model Alert {
+  id                   BigInt    @id @default(autoincrement())
+  userId               BigInt    @map("user_id")
+  portfolioId          BigInt?   @map("portfolio_id")
+  assetId              BigInt?   @map("asset_id")
+  alertType            AlertType @map("alert_type")
+  conditionValue       Decimal   @map("condition_value") @db.Decimal(20, 8)
+  lookbackWindowMinutes Int?      @map("lookback_window_minutes")
+  isActive             Boolean   @default(true) @map("is_active")
+  lastTriggeredAt      DateTime? @map("last_triggered_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user      User       @relation(fields: [userId], references: [id])
+  portfolio Portfolio? @relation(fields: [portfolioId], references: [id])
+  asset     Asset?     @relation(fields: [assetId], references: [id])
+  notifications Notification[]
+
+  @@map("alerts")
+}
+
+model Notification {
+  id        BigInt             @id @default(autoincrement())
+  userId    BigInt             @map("user_id")
+  alertId   BigInt?            @map("alert_id")
+  channel   NotificationChannel
+  payload   Json
+  status    NotificationStatus @default(PENDING)
+  createdAt DateTime           @default(now()) @map("created_at")
+  sentAt    DateTime?          @map("sent_at")
+
+  user  User   @relation(fields: [userId], references: [id])
+  alert Alert? @relation(fields: [alertId], references: [id])
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt?  @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   BigInt   @map("entity_id")
+  action     String
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_log")
+}
+
+model PortfolioSnapshot {
+  id                 BigInt   @id @default(autoincrement())
+  portfolioId        BigInt   @map("portfolio_id")
+  totalValue         Decimal  @map("total_value") @db.Decimal(20, 8)
+  totalUnrealizedPnl Decimal  @map("total_unrealized_pnl") @db.Decimal(20, 8)
+  totalRealizedPnl   Decimal  @map("total_realized_pnl") @db.Decimal(20, 8)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@map("portfolio_snapshots")
+}
