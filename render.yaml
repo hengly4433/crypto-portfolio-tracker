@@ -30,7 +30,6 @@ services:
     runtime: docker
     rootDir: .
     dockerfilePath: backend/Dockerfile
-    preDeployCommand: cd backend && npx prisma migrate deploy
     envVars:
       - key: DATABASE_URL
         fromDatabase:
