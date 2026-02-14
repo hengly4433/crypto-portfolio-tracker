@@ -22,8 +22,8 @@ services:
   backend:
     container_name: crypto-backend
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgres://crypto_user:crypto_password@postgres:5432/crypto_portfolio
       REDIS_URL: redis://redis:6379
@@ -45,8 +45,8 @@ services:
   frontend:
     container_name: crypto-frontend
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001/api
     ports:

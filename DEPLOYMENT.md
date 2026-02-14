@@ -83,6 +83,18 @@ This is confirming that your Dockerfiles work correctly before pushing to Render
 
 ## Troubleshooting
 
+### GitHub Repository Not Visible in Render
+
+If you cannot see your new repository in Render when trying to create a Blueprint:
+
+1.  In the Render Dashboard, look for the **GitHub logic** on the right side.
+2.  Click **Configure account**.
+3.  This will open GitHub settings for the Render application.
+4.  Scroll down to **Repository access**.
+5.  Ensure **All repositories** is selected, or specifically add `crypto-portfolio-tracker` to the list of selected repositories.
+6.  Click **Save**.
+7.  Refresh the Render page.
+
 ### Build Failures
 
 - **Frontend**: One common issue is TypeScript/Lint errors preventing the build. The `next.config.ts` has been configured to ignore these during the Docker build (`ignoreDuringBuilds: true`), but you should fix them in your code for long-term stability.
