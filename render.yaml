@@ -54,6 +54,8 @@ services:
         generateValue: true # Assuming this is a random string
       - key: JWT_SECRET
         generateValue: true
+      - key: CORS_ORIGIN
+        value: https://crypto-frontend-x285.onrender.com
 
   # --------------------------------------------------------------------------------
   # FRONTEND (Next.js)
