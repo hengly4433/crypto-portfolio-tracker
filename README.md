@@ -134,6 +134,7 @@ The system uses BullMQ with Redis to handle asynchronous tasks reliably:
     # If using physical device, replace localhost with your machine's LAN IP (e.g., http://192.168.1.10:3001/api)
     ```
 3.  **Run with Expo**:
+
     ```bash
     npx expo start
     ```
@@ -162,6 +163,12 @@ Set conditional alerts to stay on top of the market:
 
 - **Allocation Charts**: Donut charts showing distribution by asset or category.
 - **Performance Graphs**: Interactive area charts showing portfolio value over time.
+
+---
+
+## 📦 Deployment
+
+For detailed instructions on how to deploy the **Frontend** and **Backend** to production (recommended: Render), please refer to the [Deployment Guide](DEPLOYMENT.md).
 
 ---
 

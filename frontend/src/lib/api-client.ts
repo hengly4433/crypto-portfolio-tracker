@@ -2,7 +2,14 @@
  * Typed API client for backend communication
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const getApiBaseUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!envUrl) return 'http://localhost:3001/api';
+  if (envUrl.endsWith('/api')) return envUrl;
+  return `${envUrl}/api`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // ─── Response Types ───────────────────────────────────────────
 

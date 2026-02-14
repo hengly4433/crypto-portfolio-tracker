@@ -1,0 +1,74 @@
+databases:
+  # --------------------------------------------------------------------------------
+  # DATABASE (PostgreSQL)
+  # --------------------------------------------------------------------------------
+  - name: crypto-db
+    databaseName: crypto_portfolio
+    user: crypto_user
+    plan: free # or starter
+    region: singapore # Change to your preferred region
+
+services:
+  # --------------------------------------------------------------------------------
+  # REDIS (For BullMQ & Caching)
+  # --------------------------------------------------------------------------------
+  - type: redis
+    name: crypto-redis
+    region: singapore
+    plan: free # or starter
+    # Redis on Render doesn't need a Dockerfile; it's a managed service type (or we can use Docker if needed, but 'redis' type is easier if available on plan, otherwise use Docker)
+    # Render Blueprints support 'redis' type.
+    ipAllowList: [] # Allow all internal
+
+  # --------------------------------------------------------------------------------
+  # BACKEND (Node.js/Express)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: crypto-backend
+    region: singapore
+    plan: free # or starter
+    runtime: docker
+    rootDir: .
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crypto-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: crypto-redis
+          property: connectionString
+      - key: ACCESS_TOKEN_SECRET
+        generateValue: true
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: PORT
+        value: 3001
+      - key: COINGECKO_API_KEY
+        sync: false # User must provide this
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false # User must provide this
+      - key: ENCRYPTION_KEY
+        generateValue: true # Assuming this is a random string
+      - key: JWT_SECRET
+        generateValue: true
+
+  # --------------------------------------------------------------------------------
+  # FRONTEND (Next.js)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: crypto-frontend
+    region: singapore
+    plan: free # or starter
+    runtime: docker
+    rootDir: .
+    dockerfilePath: frontend/Dockerfile
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: crypto-backend
+          property: host
+        # The code now handles the /api suffix automatically.
