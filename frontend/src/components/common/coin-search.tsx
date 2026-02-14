@@ -61,7 +61,7 @@ export function CoinSearch({ onSelect, selectedAssetId, className }: CoinSearchP
   const performSearch = async (q: string) => {
     setIsLoading(true);
     try {
-      const res = await apiClient.searchCoins(q);
+      const res = await apiClient.searchAssets(q);
       if (res.data) {
         // Filter out coins that are already in local assets (by coingeckoId)
         const existingIds = new Set(localAssets.map(a => a.coingeckoId));

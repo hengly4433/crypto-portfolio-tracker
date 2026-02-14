@@ -17,6 +17,7 @@ import exchangeRoutes from './modules/exchanges/exchange.routes';
 const app = express();
 
 app.use(helmet());
+app.set('trust proxy', 1); // Trust first proxy (Render/Vercel)
 app.use(cors({
   origin: [
     'http://localhost:3000',
