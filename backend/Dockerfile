@@ -11,7 +11,7 @@ COPY backend/package.json backend/package-lock.json ./
 COPY backend/prisma ./prisma
 
 # Install dependencies (including dev dependencies for build)
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 # Copy source code
 COPY backend/src ./src
