@@ -17,7 +17,12 @@ RUN npm ci --ignore-scripts
 COPY backend/src ./src
 COPY backend/tsconfig.json ./
 
+# Copy prisma config
+COPY backend/prisma.config.ts ./
+
 # Generate Prisma Client
+# Set a dummy DATABASE_URL to satisfy validation during build
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
 
 # Build the application
