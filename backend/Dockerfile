@@ -18,7 +18,7 @@ COPY backend/src ./src
 COPY backend/tsconfig.json ./
 
 # Copy prisma config
-COPY backend/prisma.config.ts ./
+COPY backend/prisma.config.js ./
 
 # Generate Prisma Client
 # Set a dummy DATABASE_URL to satisfy validation during build
@@ -41,6 +41,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.js ./prisma.config.js
 
 # Expose port (default for Express)
 EXPOSE 3001
