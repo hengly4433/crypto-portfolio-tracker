@@ -1,48 +1,70 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/auth/auth-provider';
+import { ModeToggle } from '@/components/mode-toggle';
+
+const navItems = [
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/transactions', label: 'Transactions' },
+  { href: '/alerts', label: 'Alerts' },
+  { href: '/exchanges', label: 'Exchanges' },
+  { href: '/settings', label: 'Settings' },
+];
 
 export default function Navbar() {
   const { isAuthenticated, logout } = useAuth();
+  const pathname = usePathname();
 
-  const navLinkClass =
-    'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium dark:text-gray-400 dark:hover:text-gray-300';
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === href;
+    return pathname.startsWith(href);
+  };
 
   return (
-    <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <nav className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex">
+          <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
+              <Link href="/" className="text-xl font-bold tracking-tight text-foreground">
                 Crypto Tracker
               </Link>
             </div>
             {isAuthenticated && (
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link href="/dashboard" className={navLinkClass}>Dashboard</Link>
-                <Link href="/transactions" className={navLinkClass}>Transactions</Link>
-                <Link href="/alerts" className={navLinkClass}>Alerts</Link>
-                <Link href="/exchanges" className={navLinkClass}>Exchanges</Link>
-                <Link href="/settings" className={navLinkClass}>Settings</Link>
+              <div className="hidden sm:ml-8 sm:flex sm:space-x-1">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                      isActive(item.href)
+                        ? 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
               </div>
             )}
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            <ModeToggle />
             {isAuthenticated ? (
               <button
                 onClick={logout}
-                className="ml-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                className="px-4 py-2 text-sm font-medium rounded-lg text-primary-foreground bg-primary hover:bg-primary/90 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
               >
                 Sign out
               </button>
             ) : (
               <>
-                <Link href="/login" className="text-gray-500 hover:text-gray-700 px-3 py-2 text-sm font-medium dark:text-gray-400 dark:hover:text-gray-300">
+                <Link href="/login" className="text-muted-foreground hover:text-foreground px-3 py-2 text-sm font-medium transition-colors duration-200">
                   Sign in
                 </Link>
-                <Link href="/register" className="ml-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                <Link href="/register" className="px-4 py-2 text-sm font-medium rounded-lg text-primary-foreground bg-primary hover:bg-primary/90 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                   Sign up
                 </Link>
               </>

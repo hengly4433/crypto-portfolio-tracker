@@ -141,7 +141,7 @@ export default function SettingsPage() {
                 value={settings?.baseCurrency || 'USD'}
                 onValueChange={(value: string) => setSettings((s) => s ? { ...s, baseCurrency: value } : s)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -158,7 +158,7 @@ export default function SettingsPage() {
                 value={settings?.timezone || 'UTC'}
                 onValueChange={(value: string) => setSettings((s) => s ? { ...s, timezone: value } : s)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -175,7 +175,7 @@ export default function SettingsPage() {
                 value={settings?.locale || 'en-US'}
                 onValueChange={(value: string) => setSettings((s) => s ? { ...s, locale: value } : s)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

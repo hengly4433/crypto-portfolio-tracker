@@ -110,4 +110,93 @@ export class PriceController {
       next(error);
     }
   }
+
+  // ─── New CoinGecko Endpoints ────────────────────────────
+
+  /**
+   * Search CoinGecko for coins by name or symbol
+   * GET /api/prices/search?q=bitcoin
+   */
+  static async searchCoins(req: Request, res: Response, next: NextFunction) {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.trim().length === 0) {
+        throw new BadRequestError('Query parameter "q" is required');
+      }
+
+      const results = await priceService.searchCoins(query.trim());
+      res.status(200).json(results);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch market data with 24h stats for given CoinGecko IDs
+   * GET /api/prices/market-data?ids=bitcoin,ethereum&currency=usd&sparkline=false
+   */
+  static async getMarketData(req: Request, res: Response, next: NextFunction) {
+    try {
+      const idsParam = req.query.ids as string;
+      if (!idsParam || idsParam.trim().length === 0) {
+        throw new BadRequestError('Query parameter "ids" is required (comma-separated CoinGecko IDs)');
+      }
+
+      const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean);
+      const currency = (req.query.currency as string) || 'usd';
+      const sparkline = req.query.sparkline === 'true';
+
+      const data = await priceService.fetchMarketData(ids, currency, sparkline);
+      res.status(200).json(data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch price history for chart rendering
+   * GET /api/prices/:assetId/history?days=30&currency=usd
+   */
+  static async getPriceHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { assetId } = req.params;
+
+      // Look up the asset to get its coingeckoId
+      const { prisma } = await import('../../config/db');
+      const asset = await prisma.asset.findUnique({
+        where: { id: BigInt(assetId as string) },
+      });
+
+      if (!asset) {
+        throw new BadRequestError('Asset not found');
+      }
+
+      if (!asset.coingeckoId) {
+        throw new BadRequestError(`Asset ${asset.symbol} does not have a CoinGecko ID. Price history is only available for crypto assets.`);
+      }
+
+      const days = req.query.days ? Number(req.query.days) : 30;
+      const currency = (req.query.currency as string) || 'usd';
+
+      // Validate days parameter
+      const validDays = [1, 7, 14, 30, 90, 180, 365];
+      if (!validDays.includes(days)) {
+        throw new BadRequestError(`Invalid days parameter. Valid values: ${validDays.join(', ')}`);
+      }
+
+      const history = await priceService.fetchPriceHistory(asset.coingeckoId, days, currency);
+
+      res.status(200).json({
+        assetId: assetId.toString(),
+        symbol: asset.symbol,
+        name: asset.name,
+        coingeckoId: asset.coingeckoId,
+        days,
+        currency,
+        points: history,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

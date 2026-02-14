@@ -156,16 +156,56 @@ export class PortfolioService {
     );
   }
 
-  async getUserPortfolios(userId: bigint): Promise<Portfolio[]> {
-    return prisma.portfolio.findMany({
+  async getUserPortfolios(userId: bigint): Promise<any[]> {
+    const portfolios = await prisma.portfolio.findMany({
       where: { userId },
       include: {
+        positions: {
+          include: { asset: true },
+        },
         snapshots: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
       },
     });
+
+    // Calculate totals for each portfolio
+    const portfoliosWithTotals = await Promise.all(portfolios.map(async (portfolio) => {
+      let totalValue = 0;
+      let totalUnrealizedPnl = 0;
+      let totalRealizedPnl = 0;
+
+      for (const position of portfolio.positions) {
+        try {
+          const currentPrice = await this.priceService.getPriceInBase(
+            position.assetId,
+            portfolio.baseCurrency
+          );
+          
+          const marketValue = position.quantity.mul(currentPrice);
+          const unrealizedPnl = marketValue.minus(position.costBasis);
+          
+          totalValue += marketValue.toNumber();
+          totalUnrealizedPnl += unrealizedPnl.toNumber();
+          totalRealizedPnl += Number(position.realizedPnl);
+        } catch (error) {
+          // If price fetch fails, use cost basis or 0 for value, but don't crash
+          // Fallback to 0 if we can't determine value
+          console.warn(`Failed to calculate position value for portfolio ${portfolio.id}:`, error);
+        }
+      }
+
+      return {
+        ...portfolio,
+        totalValue,
+        totalUnrealizedPnl,
+        totalRealizedPnl,
+        snapshotTotalValue: portfolio.snapshots[0]?.totalValue || 0,
+      };
+    }));
+
+    return portfoliosWithTotals;
   }
 
   async getPortfolioById(id: bigint, userId: bigint): Promise<Portfolio | null> {
@@ -210,41 +250,53 @@ export class PortfolioService {
     let totalRealizedPnl = 0;
 
     for (const position of portfolio.positions) {
+      let currentPriceVal = 0;
+      let marketValueVal = 0;
+      let unrealizedPnlVal = 0;
+      let pnlPercentVal = 0;
+
       try {
         const currentPrice = await this.priceService.getPriceInBase(
           position.assetId,
           portfolio.baseCurrency
         );
+        currentPriceVal = currentPrice.toNumber();
         
         const marketValue = position.quantity.mul(currentPrice);
-        const costBasis = position.costBasis;
-        const unrealizedPnl = marketValue.minus(costBasis);
-        const pnlPercent = costBasis.isZero() ? 0 : unrealizedPnl.div(costBasis).mul(100);
-        
-        const positionSummary: PositionSummary = {
-          assetId: position.assetId,
-          symbol: position.asset.symbol,
-          name: position.asset.name,
-          assetType: position.asset.assetType,
-          quantity: position.quantity.toNumber(),
-          avgPrice: position.avgPrice.toNumber(),
-          currentPrice: currentPrice.toNumber(),
-          marketValue: marketValue.toNumber(),
-          costBasis: costBasis.toNumber(),
-          unrealizedPnl: unrealizedPnl.toNumber(),
-          realizedPnl: Number(position.realizedPnl),
-          pnlPercent: typeof pnlPercent === 'number' ? pnlPercent : pnlPercent.toNumber(),
-          weight: 0, // Will calculate after total value
-        };
+        marketValueVal = marketValue.toNumber();
 
-        positionSummaries.push(positionSummary);
-        totalValue += marketValue.toNumber();
-        totalCostBasis += costBasis.toNumber();
-        totalUnrealizedPnl += unrealizedPnl.toNumber();
-        totalRealizedPnl += Number(position.realizedPnl);
+        const unrealizedPnl = marketValue.minus(position.costBasis);
+        unrealizedPnlVal = unrealizedPnl.toNumber();
+
+        const pnlPercent = position.costBasis.isZero() ? 0 : unrealizedPnl.div(position.costBasis).mul(100);
+        pnlPercentVal = typeof pnlPercent === 'number' ? pnlPercent : pnlPercent.toNumber();
+
       } catch (error) {
         console.error(`Failed to calculate position for asset ${position.assetId}:`, error);
+        // Fallback: If price fails, show 0 or maybe valid fields like quantity
       }
+
+      const positionSummary: PositionSummary = {
+        assetId: position.assetId,
+        symbol: position.asset.symbol,
+        name: position.asset.name,
+        assetType: position.asset.assetType,
+        quantity: position.quantity.toNumber(),
+        avgPrice: position.avgPrice.toNumber(),
+        currentPrice: currentPriceVal,
+        marketValue: marketValueVal,
+        costBasis: position.costBasis.toNumber(),
+        unrealizedPnl: unrealizedPnlVal,
+        realizedPnl: Number(position.realizedPnl),
+        pnlPercent: pnlPercentVal,
+        weight: 0, // Will calculate after total value
+      };
+
+      positionSummaries.push(positionSummary);
+      totalValue += marketValueVal;
+      totalCostBasis += position.costBasis.toNumber();
+      totalUnrealizedPnl += unrealizedPnlVal;
+      totalRealizedPnl += Number(position.realizedPnl);
     }
 
     // Calculate weights

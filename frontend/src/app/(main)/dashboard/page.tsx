@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ArrowUpRight, TrendingUp, Wallet, LayoutGrid, Loader2 } from 'lucide-react';
+import { Plus, ArrowUpRight, TrendingUp, Wallet, LayoutGrid, Loader2, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { usePortfolios, useCreatePortfolio } from '@/lib/hooks/use-portfolios';
+import { usePortfolios, useCreatePortfolio, useDeletePortfolio } from '@/lib/hooks/use-portfolios';
 import { Portfolio } from '@/lib/api-client';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: portfolios = [], isLoading, error } = usePortfolios();
   const createPortfolio = useCreatePortfolio();
+  const deletePortfolio = useDeletePortfolio();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
@@ -34,6 +35,19 @@ export default function DashboardPage() {
       toast.success('Portfolio created successfully');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create portfolio');
+    }
+  };
+
+  const handleDeletePortfolio = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent card click navigation
+    if (!confirm('Are you sure you want to delete this portfolio? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await deletePortfolio.mutateAsync(id);
+      toast.success('Portfolio deleted');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete portfolio');
     }
   };
 
@@ -105,7 +119,7 @@ export default function DashboardPage() {
             <Wallet className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+            <div className="text-3xl font-bold text-foreground">
               ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Across all portfolios</p>
@@ -168,15 +182,26 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {portfolios.map((portfolio: Portfolio) => (
-              <Card key={portfolio.id} variant="glass-hover" className="group cursor-pointer" onClick={() => router.push(`/portfolio/${portfolio.id}`)}>
+              <Card key={portfolio.id} variant="glass-hover" className="group cursor-pointer relative" onClick={() => router.push(`/portfolio/${portfolio.id}`)}>
                 <CardHeader className="pb-3">
                    <div className="flex justify-between items-start">
                      <div>
                        <Badge variant="outline" className="mb-2 uppercase text-[10px] tracking-wider">{portfolio.baseCurrency}</Badge>
                        <CardTitle className="text-xl group-hover:text-primary transition-colors">{portfolio.name}</CardTitle>
                      </div>
-                     <div className="p-2 bg-background/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ArrowUpRight className="w-4 h-4 text-primary" />
+                     <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 z-10"
+                          onClick={(e) => handleDeletePortfolio(e, portfolio.id)}
+                          title="Delete Portfolio"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <div className="p-2 bg-background/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                           <ArrowUpRight className="w-4 h-4 text-primary" />
+                        </div>
                      </div>
                    </div>
                 </CardHeader>

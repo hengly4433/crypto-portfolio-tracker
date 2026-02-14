@@ -48,7 +48,7 @@ export default function RegisterPage() {
       }
 
       toast.success('Account created successfully!');
-      router.push('/dashboard');
+      router.push('/');
     } catch (err) {
       setError('An unexpected error occurred');
       toast.error('An unexpected error occurred');

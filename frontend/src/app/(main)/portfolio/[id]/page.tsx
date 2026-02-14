@@ -199,10 +199,10 @@ export default function PortfolioDetailPage() {
                     {positions.map((position: PositionSummary) => {
                       const percentage = totalValue > 0 ? ((position.marketValue ?? 0) / totalValue) * 100 : 0;
                       return (
-                        <div key={position.assetSymbol} className="flex items-center justify-between text-sm">
+                        <div key={position.symbol} className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
                              <div className="w-2 h-2 rounded-full bg-primary" />
-                             <span>{position.assetSymbol}</span>
+                             <span>{position.symbol}</span>
                           </div>
                           <span className="text-muted-foreground">{percentage.toFixed(1)}%</span>
                         </div>
@@ -221,17 +221,17 @@ export default function PortfolioDetailPage() {
              <CardContent>
                <div className="space-y-4">
                   {positions.slice(0, 5).map((position: PositionSummary) => (
-                    <div key={position.assetSymbol} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
+                    <div key={position.symbol} className="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                           {position.assetSymbol.slice(0,1)}
+                           {position.symbol.slice(0,1)}
                         </div>
                         <div>
                           <div className="font-medium text-foreground">
-                            {position.assetName || position.assetSymbol}
+                            {position.name || position.symbol}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {position.quantity} {position.assetSymbol}
+                            {position.quantity} {position.symbol}
                           </div>
                         </div>
                       </div>
@@ -242,8 +242,8 @@ export default function PortfolioDetailPage() {
                             maximumFractionDigits: 2 
                           })}
                         </div>
-                        <div className={`text-sm font-medium ${(position.pnlPercentage ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {(position.pnlPercentage ?? 0) >= 0 ? '+' : ''}{(position.pnlPercentage ?? 0).toFixed(2)}%
+                        <div className={`text-sm font-medium ${(position.pnlPercent ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {(position.pnlPercent ?? 0) >= 0 ? '+' : ''}{(position.pnlPercent ?? 0).toFixed(2)}%
                         </div>
                       </div>
                     </div>
@@ -274,10 +274,10 @@ export default function PortfolioDetailPage() {
                    {positions.length === 0 ? (
                       <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No positions found</td></tr>
                    ) : positions.map((position: PositionSummary) => (
-                     <tr key={position.assetSymbol} className="hover:bg-white/5 transition-colors">
+                     <tr key={position.symbol} className="hover:bg-white/5 transition-colors">
                        <td className="px-6 py-4">
-                         <div className="font-medium text-foreground">{position.assetSymbol}</div>
-                         <div className="text-xs text-muted-foreground">{position.assetName || position.assetSymbol}</div>
+                         <div className="font-medium text-foreground">{position.symbol}</div>
+                         <div className="text-xs text-muted-foreground">{position.name || position.symbol}</div>
                        </td>
                        <td className="px-6 py-4">{position.quantity}</td>
                        <td className="px-6 py-4 text-muted-foreground">${(position.avgPrice ?? 0).toLocaleString()}</td>
@@ -289,8 +289,8 @@ export default function PortfolioDetailPage() {
                           </span>
                        </td>
                        <td className="px-6 py-4">
-                          <Badge variant={(position.pnlPercentage ?? 0) >= 0 ? 'success' : 'destructive'}>
-                             {(position.pnlPercentage ?? 0).toFixed(2)}%
+                          <Badge variant={(position.pnlPercent ?? 0) >= 0 ? 'success' : 'destructive'}>
+                             {(position.pnlPercent ?? 0).toFixed(2)}%
                           </Badge>
                        </td>
                      </tr>

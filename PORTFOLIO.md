@@ -1,91 +1,127 @@
-# Crypto Portfolio Tracker - User Guide
+# Crypto Portfolio Tracker - User Guide & Logic
 
-This guide explains the meaningful concepts and logic behind the Crypto Portfolio Tracker. It is designed to help you understand how the system works and how to interpret the numbers you see.
+This guide provides an in-depth explanation of how the Crypto Portfolio Tracker functions, calculates your performance, and how to best utilize its features on both Web and Mobile.
 
-## 1. System Overview
+## 1. Core Logic: How We Calculate Your Numbers
 
-The Crypto Portfolio Tracker is a tool to monitor your cryptocurrency investments across different wallets and exchanges in one place. It does not hold your actual assets; instead, it tracks the _value_ of your holdings based on the transactions you record.
+The system uses specific accounting methods to track your performance. Understanding this ensures you know exactly what your "Profit/Loss" numbers mean.
 
-### Core Concepts
+### A. Average Cost Basis (ACB)
 
-- **Portfolio**: A collection of assets. You can have multiple portfolios (e.g., "Main Holidings", "High Risk", "Retirement"). Each portfolio has a **Base Currency** (like USD or EUR) which all asset values are converted to for a unified total.
-- **Asset**: A cryptocurrency or token (e.g., Bitcoin, Ethereum).
-- **Position**: The amount of a specific asset you currently hold in a portfolio.
-- **Transaction**: A record of a movement (buying, selling, transferring) that changes your position.
+We use the **Average Cost Basis** method to track the cost of your investments. This is the industry standard for portfolio tracking.
 
-## 2. Managing Your Portfolio
+**The Formula:**
+When you buy more of an asset, your new "average buy price" is recalculated:
 
-### Creating a Portfolio
+```
+New Avg Price = ( (Old Qty * Old Avg Price) + (New Qty * New Buy Price) ) / Total New Qty
+```
 
-When you create a portfolio, you select a **Base Currency**. This is important because:
+**Example:**
 
-- All your dashboard totals will be shown in this currency.
-- The system automatically handles currency conversion. For example, if your base currency is USD but you buy Bitcoin with EUR, the system calculates the USD value of that trade at the time it happened.
+1. You buy **1 BTC** at **$50,000**. (Avg Cost: $50,000)
+2. You buy **1 BTC** at **$60,000**.
+3. Total spent: $110,000 for 2 BTC.
+4. **New Avg Cost: $55,000**.
 
-## 3. Recording Transactions
+### B. Profit & Loss (PnL)
 
-To ensure your portfolio is accurate, you must record transactions that reflect your real-world activity. The system supports several types:
+#### Unrealized PnL (Paper Profit)
 
-### A. Buy
+This is the theoretical profit you would make if you sold everything _right now_.
 
-**Use this when:** You exchange fiat currency (USD, EUR) or another asset to acquire a crypto asset.
+- `(Current Market Price - Avg Cost) * Quantity`
 
-- **Effect**: Increases your asset Quantity.
-- **Cost Basis**: Increases by the total value of what you paid (Trade Value + Fees).
-- **Example**: Buying 1 BTC for $50,000. Your Quantity becomes 1, and Cost Basis becomes $50,000.
+#### Realized PnL (Locked-in Profit)
 
-### B. Sell
+This is the actual profit you made from _selling_ an asset.
 
-**Use this when:** You exchange a crypto asset for fiat currency.
+- `(Sell Price - Avg Cost at time of sale) * Quantity Sold`
 
-- **Effect**: Decreases your asset Quantity.
-- **Cost Basis**: Reduces proportionally.
-- **PnL**: The system calculates "Realized Profit/Loss" by comparing the value you sold it for against the average cost to acquire that portion.
+> **Note:** Realized PnL is calculated **FIFO (First-In, First-Out)** by default for tax estimations, but the UI simplifies this to show PnL against your _Average Cost_.
 
-### C. Deposit / Transfer In / Income
+---
 
-**Use this when:**
+## 2. Transaction Types Explained
 
-- **Deposit**: You move existing crypto into a wallet you are tracking from a source you _aren't_ tracking.
-- **Transfer In**: Moving assets between your own accounts (if tracking individually).
-- **Income**: Gaining crypto from staking, mining, or airdrops.
-- **Effect**: Increases your asset Quantity.
-- **Cost Basis**:
-  - **Income**: Often treated as a purchase with $0 cost (or market value at time of receipt, depending on tax settings).
-  - **Deposit**: Adds quantity without increasing the "cost" to acquire it within this specific portfolio logic (effectively lowering your average buy price).
+Correctly categorizing your transactions is crucial for accurate tracking.
 
-### D. Withdrawal / Transfer Out / Fee
+### 🟢 Value-Increasing Events (Inflows)
 
-**Use this when:** You send crypto out of your tracked wallet, or pay a fee in crypto.
+| Type            | Description                                     | Effect on Cost Basis                                                                                      |
+| :-------------- | :---------------------------------------------- | :-------------------------------------------------------------------------------------------------------- |
+| **BUY**         | Buying crypto with fiat.                        | **Updates** Avg Cost Basis relative to purchase price.                                                    |
+| **DEPOSIT**     | Transferring crypto IN from an external wallet. | **Does NOT change** Avg Buy Price. Increases quantity only. (Effectively lowers avg cost if price > avg). |
+| **INCOME**      | Staking rewards, Mining, Airdrops.              | Treated as a **$0 Cost** acquisition. Drastically lowers your Avg Buy Price.                              |
+| **TRANSFER_IN** | Moving funds between tracked portfolios.        | Same as Deposit.                                                                                          |
 
-- **Effect**: Decreases your asset Quantity.
-- **Cost Basis**: Reduces proportionally (similar to selling, but doesn't trigger a Realized PnL event in the same way).
+### 🔴 Value-Decreasing Events (Outflows)
 
-## 4. Understanding Performance Metrics
+| Type             | Description                              | Effect on Cost Basis                                                 |
+| :--------------- | :--------------------------------------- | :------------------------------------------------------------------- |
+| **SELL**         | Selling crypto for fiat.                 | Realizes PnL. Does **NOT** change Avg Buy Price for remaining coins. |
+| **WITHDRAWAL**   | moving crypto OUT to an external wallet. | Reduces Quantity. Does **NOT** realize PnL.                          |
+| **FEE**          | Paying gas fees or exchange fees.        | Reduces Quantity. Treated as a realized loss for tax purposes.       |
+| **TRANSFER_OUT** | Moving funds between tracked portfolios. | Same as Withdrawal.                                                  |
 
-The system provides two key ways to look at profit and loss:
+---
 
-### Unrealized PnL (Paper Profit)
+## 3. Mobile App Usage
 
-This shows how much you _would_ make or lose if you sold everything right now.
+The mobile app (`/app`) offers a streamlined experience for tracking on the go.
 
-- **Calculation**: `(Current Market Price * Quantity) - Remaining Cost Basis`
-- **Meaning**: If this is positive, your assets are worth more than you paid for them. This changes constantly with market prices.
+### 📱 Navigation
 
-### Realized PnL (Locked-in Profit)
+- **Dashboard (Home)**:
+  - **Portfolio Card**: Swipe left/right to switch between different portfolios.
+  - **Quick Actions**: "Add Transaction", "Price Alert".
+  - **Top Movers**: Horizontal scroll of assets with biggest 24h change.
 
-This shows the actual profit or loss you have "booked" by selling assets.
+- **Portfolio Tab**:
+  - Detailed list of all assets.
+  - Sort by: Value (High-Low), Name (A-Z), Performance (Best-Worst).
+  - Tap an asset to see its **History Graph** and **Transaction Log**.
 
-- **Calculation**: `Value Sold - (Average Cost of Sold Coins) - Fees`
-- **Meaning**: This number only changes when you sell. It represents money you have actually made.
+- **Alerts Tab**:
+  - Manage all active price and percentage alerts.
+  - **Push Notifications**: Ensure you have enabled notifications in your OS settings to receive alerts even when the app is closed.
 
-### Total Portfolio Value
+---
 
-This is the sum of the current market value of all your open positions.
+## 4. Advanced Alerts System
 
-## 5. Alerts
+The system runs a background job every minute to check your alert conditions.
 
-You can set alerts to stay informed without constantly checking the charts.
+### Alert Types
 
-- **Price Alert**: Notify me if Bitcoin goes above $100,000.
-- **Percentage Alert**: Notify me if Ethereum drops by 5% in 1 hour.
+1.  **Price Target**: `BTC > $100,000`
+    - Good for: Taking profit or buying the dip.
+2.  **Percentage Change**: `ETH drops 5% in 1 hour`
+    - Good for: Catching sudden crashes or pumps (Volatility).
+3.  **Portfolio Drawdown**: `Total Value drops 10% from High`
+    - Good for: Risk management and stop-loss warnings for your entire account.
+
+### How it works
+
+1.  **Server-Side**: The backend checks CoinGecko API prices every 60 seconds.
+2.  **Trigger**: If a condition is met, a **Notification Job** is created.
+3.  **Delivery**:
+    - **Mobile**: Push Notification via Expo/Firebase.
+    - **Email**: (If configured) Sent via SMTP.
+    - **In-App**: Shows up in your Notifications center.
+
+---
+
+## 5. FAQs
+
+**Q: Why is my Portfolio Value different from my Exchange?**
+A: Exchanges often use "Bid" or "Mid-market" prices. We use the **Last Traded Price** from CoinGecko globally. Small discrepancies (<1%) are normal.
+
+**Q: Do you treat Crypto-to-Crypto trades?**
+A: Yes! A trade like "BTC -> ETH" is recorded as two transactions:
+
+1.  **SELL BTC** (Realizes PnL on BTC).
+2.  **BUY ETH** (Establishes new Cost Basis for ETH).
+
+**Q: Is my data private?**
+A: Yes. All data is stored on your own self-hosted database (PostgreSQL). No third-party analytics track your portfolio value.

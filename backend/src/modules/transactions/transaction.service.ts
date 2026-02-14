@@ -77,6 +77,15 @@ export class TransactionService {
         feeAmountBase = feeAmountDecimal.mul(fxRate);
       }
 
+      // 1. Get Asset to check symbol for fee deduction
+      const asset = await tx.asset.findUnique({
+        where: { id: assetId },
+      });
+
+      if (!asset) {
+        throw new BadRequestError('Asset not found');
+      }
+
       // 1. Create Transaction Record
       const transaction = await tx.transaction.create({
         data: {
@@ -104,6 +113,9 @@ export class TransactionService {
         quantity: qtyDecimal,
         grossAmountBase,
         feeAmountBase,
+        feeAmount: feeAmountDecimal,
+        feeCurrency,
+        assetSymbol: asset.symbol,
         priceDecimal,
         portfolioBaseCurrency: portfolio.baseCurrency,
       });
@@ -151,6 +163,9 @@ export class TransactionService {
       quantity: Prisma.Decimal;
       grossAmountBase: Prisma.Decimal;
       feeAmountBase: Prisma.Decimal;
+      feeAmount: Prisma.Decimal;
+      feeCurrency?: string;
+      assetSymbol: string;
       priceDecimal: Prisma.Decimal;
       portfolioBaseCurrency: string;
     }
@@ -163,6 +178,9 @@ export class TransactionService {
       quantity,
       grossAmountBase,
       feeAmountBase,
+      feeAmount,
+      feeCurrency,
+      assetSymbol,
       priceDecimal,
       portfolioBaseCurrency,
     } = data;
@@ -185,6 +203,9 @@ export class TransactionService {
           quantity,
           grossAmountBase,
           feeAmountBase,
+          feeAmount,
+          feeCurrency,
+          assetSymbol,
           priceDecimal,
           existingPosition,
         });
@@ -255,6 +276,9 @@ export class TransactionService {
       quantity: Prisma.Decimal;
       grossAmountBase: Prisma.Decimal;
       feeAmountBase: Prisma.Decimal;
+      feeAmount: Prisma.Decimal;
+      feeCurrency?: string;
+      assetSymbol: string;
       priceDecimal: Prisma.Decimal;
       existingPosition: any;
     }
@@ -266,14 +290,24 @@ export class TransactionService {
       quantity,
       grossAmountBase,
       feeAmountBase,
+      feeAmount,
+      feeCurrency,
+      assetSymbol,
       priceDecimal,
       existingPosition,
     } = data;
 
-    const totalCost = grossAmountBase.plus(feeAmountBase);
+    // Check if fee is paid in the asset itself (e.g. bought 1 ETH, fee 0.001 ETH)
+    const isFeeInAsset = feeCurrency === assetSymbol;
+    
+    // If fee is in asset, we deduct it from the quantity we receive.
+    // The Cost Basis should NOT increase by the fee value in this case, 
+    // because the fee was already part of the gross amount we paid for.
+    const netQuantity = isFeeInAsset ? quantity.minus(feeAmount) : quantity;
+    const totalCost = isFeeInAsset ? grossAmountBase : grossAmountBase.plus(feeAmountBase);
 
     if (existingPosition) {
-      const newQuantity = existingPosition.quantity.plus(quantity);
+      const newQuantity = existingPosition.quantity.plus(netQuantity);
       const newCostBasis = existingPosition.costBasis.plus(totalCost);
       const newAvgPrice = newQuantity.isZero() ? new Prisma.Decimal(0) : newCostBasis.div(newQuantity);
 
@@ -291,7 +325,7 @@ export class TransactionService {
           portfolioId,
           assetId,
           userAccountId,
-          quantity,
+          quantity: netQuantity,
           costBasis: totalCost,
           avgPrice: priceDecimal,
           realizedPnl: 0,

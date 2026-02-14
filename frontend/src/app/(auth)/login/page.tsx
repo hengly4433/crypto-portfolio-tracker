@@ -33,7 +33,7 @@ export default function LoginPage() {
       }
 
       toast.success('Welcome back!');
-      router.push('/dashboard');
+      router.push('/');
     } catch (err) {
       setError('An unexpected error occurred');
       toast.error('An unexpected error occurred');

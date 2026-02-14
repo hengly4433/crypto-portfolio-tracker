@@ -54,6 +54,11 @@ export interface Portfolio {
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+  // Calculated fields (optional as they may not be present on creation, but will be on fetch)
+  totalValue?: number;
+  totalUnrealizedPnl?: number;
+  totalRealizedPnl?: number;
+  snapshotTotalValue?: number;
 }
 
 export interface PositionSummary {
@@ -114,8 +119,12 @@ export interface Transaction {
   feeAmount: number;
   feeCurrency?: string;
   tradeTime: string;
+  createdAt: string;
   note?: string;
   asset?: Asset;
+  userAccountId?: string;
+  type?: string;
+  status?: string;
 }
 
 export interface CreateTransactionInput {
@@ -144,6 +153,22 @@ export interface Asset {
   baseCurrency?: string;
   quoteCurrency?: string;
   isActive: boolean;
+}
+
+export interface CoinSearchResult {
+  id: string;
+  name: string;
+  symbol: string;
+  market_cap_rank: number | null;
+  thumb: string;
+  large: string;
+}
+
+export interface CreateAssetInput {
+  symbol: string;
+  name: string;
+  coingeckoId: string;
+  assetType?: AssetType;
 }
 
 // ─── Alert Types ──────────────────────────────────────────────
@@ -408,6 +433,17 @@ class ApiClient {
 
   async getAssets() {
     return this.request<Asset[]>('/assets');
+  }
+
+  async createAsset(asset: CreateAssetInput) {
+    return this.request<Asset>('/assets', {
+      method: 'POST',
+      body: JSON.stringify(asset),
+    });
+  }
+
+  async searchAssets(query: string) {
+    return this.request<CoinSearchResult[]>(`/assets/search?query=${encodeURIComponent(query)}`);
   }
 
   // ─── Alert Methods ──────────────────────────────────────────

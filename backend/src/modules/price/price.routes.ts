@@ -5,19 +5,23 @@ import { authMiddleware } from '../../common/middlewares/auth.middleware';
 
 const router = Router();
 
-// Price routes (protected)
+// ─── CoinGecko endpoints (must be before /:assetId catch-all) ───
+
+// Search CoinGecko coins
 router.get(
-  '/:assetId',
+  '/search',
   authMiddleware,
-  PriceController.getPrice
+  PriceController.searchCoins
 );
 
+// Market data with 24h stats
 router.get(
-  '/:assetId/base',
+  '/market-data',
   authMiddleware,
-  PriceController.getPriceInBase
+  PriceController.getMarketData
 );
 
+// FX rate endpoint
 router.get(
   '/fx/rate',
   authMiddleware,
@@ -29,6 +33,29 @@ router.post(
   '/update-all',
   authMiddleware,
   PriceController.updatePrices
+);
+
+// ─── Asset-specific endpoints (/:assetId catch-all last) ────────
+
+// Price history for charts
+router.get(
+  '/:assetId/history',
+  authMiddleware,
+  PriceController.getPriceHistory
+);
+
+// Price in base currency
+router.get(
+  '/:assetId/base',
+  authMiddleware,
+  PriceController.getPriceInBase
+);
+
+// Single price lookup
+router.get(
+  '/:assetId',
+  authMiddleware,
+  PriceController.getPrice
 );
 
 export default router;

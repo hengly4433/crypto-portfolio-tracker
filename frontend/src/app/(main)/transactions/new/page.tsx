@@ -19,6 +19,7 @@ import {
   DollarSign,
   FileText,
 } from 'lucide-react';
+import { CoinSearch } from '@/components/common/coin-search';
 
 /* ── tiny helper ─────────────────────────────────────────────── */
 function SectionHeader({
@@ -55,7 +56,7 @@ function TransactionForm() {
   const initialPortfolioId = searchParams.get('portfolioId') || '';
 
   const [portfolios, setPortfolios] = useState<any[]>([]);
-  const [assets, setAssets] = useState<any[]>([]);
+  // const [assets, setAssets] = useState<any[]>([]); // handled by CoinSearch
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,14 +92,6 @@ function TransactionForm() {
         setPortfolios(portfoliosResult.data);
         if (portfoliosResult.data.length > 0 && !portfolioId) {
           setPortfolioId(portfoliosResult.data[0].id);
-        }
-      }
-
-      const assetsResult = await apiClient.getAssets();
-      if (!assetsResult.error && assetsResult.data) {
-        setAssets(assetsResult.data);
-        if (assetsResult.data.length > 0) {
-          setAssetId(assetsResult.data[0].id);
         }
       }
     } catch {
@@ -138,7 +131,7 @@ function TransactionForm() {
         transactionCurrency,
         feeAmount: feeAmount ? parseFloat(feeAmount) : 0,
         feeCurrency,
-        tradeTime: new Date(tradeTime).toISOString(),
+        date: new Date(tradeTime).toISOString(),
         note,
       };
 
@@ -196,7 +189,7 @@ function TransactionForm() {
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* ─── Section 1 · Trade Details ───────────────── */}
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+          <section className="relative z-40 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <SectionHeader icon={Briefcase} title="Trade Details" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -224,26 +217,14 @@ function TransactionForm() {
               </div>
 
               {/* Asset */}
-              <div className={fieldHoverWrap}>
+              <div className={`${fieldHoverWrap} relative z-30`}>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
                   Asset <span className="text-primary">*</span>
                 </label>
-                <select
-                  value={assetId}
-                  onChange={(e) => setAssetId(e.target.value)}
-                  className={fieldBase}
-                  required
-                >
-                  {assets.map((asset) => (
-                    <option
-                      key={asset.id}
-                      value={asset.id}
-                      className="bg-popover text-popover-foreground"
-                    >
-                      {asset.symbol} – {asset.name}
-                    </option>
-                  ))}
-                </select>
+                <CoinSearch
+                  selectedAssetId={assetId}
+                  onSelect={(asset) => setAssetId(asset.id)}
+                />
               </div>
 
               {/* Transaction Type */}
@@ -287,7 +268,7 @@ function TransactionForm() {
           </section>
 
           {/* ─── Section 2 · Amount ──────────────────────── */}
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+          <section className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
             <SectionHeader icon={Coins} title="Amount" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -352,7 +333,7 @@ function TransactionForm() {
           </section>
 
           {/* ─── Section 3 · Fees ────────────────────────── */}
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+          <section className="relative z-20 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <SectionHeader icon={ReceiptText} title="Fees" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -394,7 +375,7 @@ function TransactionForm() {
           </section>
 
           {/* ─── Section 4 · Timing & Notes ──────────────── */}
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
+          <section className="relative z-10 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
             <SectionHeader icon={Clock} title="Timing & Notes" />
 
             <div className="space-y-5">
@@ -444,11 +425,16 @@ function TransactionForm() {
                 Cancel
               </Button>
             </Link>
-            <Button type="submit" variant="glow" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              variant="glow"
+              className="w-full h-12 text-md font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none hover:scale-[1.01] active:scale-[0.99]"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Adding…
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin text-primary-foreground/70" />
+                  Processing...
                 </>
               ) : (
                 'Add Transaction'

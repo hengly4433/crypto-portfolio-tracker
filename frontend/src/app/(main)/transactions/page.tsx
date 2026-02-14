@@ -54,7 +54,10 @@ export default function TransactionsPage() {
           </p>
         </div>
         <Link href="/transactions/new">
-          <Button variant="glow" className="gap-2">
+          <Button 
+            variant="glow" 
+            className="gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-lg hover:shadow-primary/50"
+          >
             <Plus className="w-4 h-4" /> Add Transaction
           </Button>
         </Link>
@@ -123,6 +126,7 @@ export default function TransactionsPage() {
                     <th className="px-6 py-3 font-medium">Type</th>
                     <th className="px-6 py-3 font-medium">Quantity</th>
                     <th className="px-6 py-3 font-medium">Price</th>
+                    <th className="px-6 py-3 font-medium">Fee</th>
                     <th className="px-6 py-3 font-medium">Amount</th>
                     <th className="px-6 py-3 font-medium">Actions</th>
                   </tr>
@@ -135,10 +139,10 @@ export default function TransactionsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-foreground">
-                          {transaction.assetSymbol || '—'}
+                          {transaction.asset?.symbol || '—'}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {transaction.assetName || ''}
+                          {transaction.asset?.name || ''}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -158,6 +162,22 @@ export default function TransactionsPage() {
                           maximumFractionDigits: 2 
                         })}
                       </td>
+                      <td className="px-6 py-4 text-muted-foreground">
+                        {transaction.feeAmount > 0 ? (
+                          <span>
+                            {transaction.feeCurrency === 'USD' || transaction.feeCurrency === 'USDT' ? '$' : 
+                             transaction.feeCurrency === 'EUR' ? '€' : ''}
+                            {transaction.feeAmount.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                            {' '}
+                            <span className="text-xs">{transaction.feeCurrency}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/50">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 font-medium text-foreground">
                         ${(transaction.grossAmount || transaction.price * transaction.quantity).toLocaleString(undefined, { 
                           minimumFractionDigits: 2, 
@@ -166,9 +186,11 @@ export default function TransactionsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                            <Edit className="w-4 h-4" />
-                          </Button>
+                          <Link href={`/transactions/${transaction.id}/edit`}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </Link>
                           <Button
                             variant="ghost"
                             size="icon"

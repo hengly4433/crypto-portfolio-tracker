@@ -1,181 +1,174 @@
 # Crypto Portfolio Tracker
 
-A comprehensive cryptocurrency portfolio tracking application built with a modern tech stack. This system allows users to track their crypto assets, visualize performance, and set alerts.
+A comprehensive, full-stack cryptocurrency portfolio tracking application built with a modern tech stack. This system allows users to track their crypto assets across multiple wallets and exchanges, visualize performance with real-time data, and set sophisticated alerts. The project consists of a robust backend API, a responsive web frontend, and a cross-platform mobile application.
 
 ## 🏗 System Architecture
 
-The project follows a client-server architecture:
+The project follows a modular client-server architecture designed for scalability and maintainability:
 
-- **Frontend**: Next.js 15 (App Router), Tailwind CSS, Shadcn UI, Recharts.
-- **Backend**: Node.js, Express, TypeScript, Prisma ORM.
-- **Database**: PostgreSQL.
-- **Infrastructure**: Redis (for caching/queues), BullMQ (background jobs).
+### 1. Backend API (`/backend`)
 
-### Directory Structure
+- **Core**: Node.js with Express.
+- **Language**: TypeScript for type safety.
+- **Database**: PostgreSQL with Prisma ORM for relational data management.
+- **Caching & Queues**: Redis is used for caching price data and managing background job queues via BullMQ.
+- **External APIs**: Integrates with CoinGecko (Crypto) and AlphaVantage (Forex/Commodities) for market data.
 
-- `frontend/`: Next.js application handling the UI/UX.
-- `backend/`: Express application handling APIs, business logic, and database interactions.
+### 2. Web Frontend (`/frontend`)
 
-## 🧠 Logic Processing & Data Flow
+- **Framework**: Next.js 15 (App Router) for server-side rendering and static generation.
+- **Styling**: Tailwind CSS with Shadcn UI for a modern, accessible component library.
+- **State Management**: React Query for server state and caching.
+- **Visualization**: Recharts for interactive financial charts.
 
-### 1. Authentication
+### 3. Mobile App (`/app`)
 
-- **Method**: JWT (JSON Web Tokens).
+- **Framework**: Expo (React Native).
+- **Navigation**: React Navigation (Stack & Tab).
+- **State Management**: Zustand for global client state.
+- **Storage**: AsyncStorage for local persistence.
+
+---
+
+## 🧠 Logic & Data Processing
+
+### 1. Authentication & Security
+
+- **JWT Authentication**: Secure stateless authentication using Access and Refresh tokens.
 - **Flow**:
-  1. User registers/logs in via Frontend.
-  2. Backend validates credentials and issues an `access_token` and `refresh_token`.
-  3. Frontend stores tokens (likely in LocalStorage/Cookies) and attaches them to subsequent API requests via the `Authorization` header.
-  4. Middleware in Backend verifies the token for protected routes.
+  1. User logs in -> Backend validates & issues tokens.
+  2. Tokens are stored securely (HTTP-only cookies on web, SecureStore/AsyncStorage on mobile).
+  3. subsequent requests include `Authorization: Bearer <token>`.
+  4. Interceptors automatically handle token refreshment on 401 errors.
 
-### 2. Portfolio Management
+### 2. Price Feeds & Market Data
 
-- **Model**: Users can create multiple `Portfolios`.
-- **Assets**: Portfolios contain `Positions` which link to `Assets` (Coins/Tokens).
-- **Transactions**: Buy/Sell/Transfer actions are recorded as `Transactions`.
-- **Calculation**: Portfolio value is calculated by aggregating current market prices of assets held in positions.
+- **Multi-Source Fetching**: The `PriceService` intelligently fetches data from CoinGecko for crypto and AlphaVantage for forex/gold.
+- **Smart Caching**:
+  - **Redis Layer**: Prices are cached in Redis (TTL ~1-5 min) to minimize external API calls and avoid rate limits.
+  - **Database Layer**: Historical price points are stored in PostgreSQL for trend analysis.
+- **Batch Processing**: The system assumes a "Batch Fetch" strategy for crypto prices, grouping requests to optimize quota usage.
 
-### 3. Data Updates
+### 3. Background Jobs (BullMQ)
 
-- **Market Data**: The system fetches real-time or scheduled price updates (likely via background jobs using BullMQ) to update `Asset` prices.
-- **Synchronization**: `Prisma` creates/updates records in the `PostgreSQL` database.
+The system uses BullMQ with Redis to handle asynchronous tasks reliably:
 
-### 4. Portfolio System Logic
+- **`alert-checks`**: Runs every minute. Checks active alerts against current market prices and triggers notifications.
+- **`notifications`**: Processes pending notifications (email, push) to ensure delivery without blocking the main API thread.
+- **`price-updates`**: (Configurable) Scheduled jobs to update asset prices in the background.
 
-The portfolio system is the core of the application, designed to track asset performance and position history.
+### 4. Portfolio Mathematics
 
-#### 4.1. Portfolio Structure
+- **Average Cost Basis**: The system calculates the average cost of acquiring assets.
+  - _Formula_: `(Old Cost + New Transaction Value) / Total Quantity`.
+- **PnL Calculation**:
+  - **Unrealized PnL**: `(Current Price - Avg Comp Cost) * Quantity`.
+  - **Realized PnL**: Calculated only on **SELL** transactions associated with the specific cost basis of the assets sold.
+- **Snapshots**: Periodic snapshots of portfolio value are taken to generate historical performance charts (1D, 7D, 30D, All).
 
-- A **Portfolio** is a container for holdings.
-- It has a `baseCurrency` (e.g., USD, EUR) used for all aggregate value calculations.
-- It contains **Positions**, where each position represents a specific Asset held.
-
-#### 4.2. Position Management
-
-Positions are _derived_ from Transactions but stored as separate records for performance.
-
-- **Quantity**: Net sum of all buy/sell/inflow/outflow quantities.
-- **Cost Basis**: Total cost to acquire the _current_ quantity.
-  - **Buy**: Increases cost basis by (Price \* Qty) + Fees.
-  - **Sell**: Reduces cost basis proprtionally.
-    - `NewCostBasis = OldCostBasis - (OldCostBasis * (SellQty / OldQty))`
-- **Realized PnL**: Calculated on every SELL transaction.
-  - `RealizedPnL = SellValue - CostOfSoldParts - Fees`
-
-#### 4.3 Transaction types
-
-The system supports multiple transaction sides affecting positions differently:
-
-- **BUY**: Increases Quantity and Cost Basis.
-- **SELL**: Decreases Quantity and Cost Basis; Updates Realized PnL.
-- **DEPOSIT / TRANSFER_IN / INCOME**: Increases Quantity; Cost Basis remains 0 (or treated as 0-cost acquisition).
-- **WITHDRAWAL / TRANSFER_OUT / FEE**: Decreases Quantity; Reduces Cost Basis proportionally.
-
-#### 4.4 Analytics & Performance
-
-- **Live Performance**:
-  - `Unrealized PnL = (Current Price * Quantity) - Cost Basis`
-  - `Total Value = Sum(Position Market Values)`
-- **Snapshots**:
-  - A background job (or trigger) captures `PortfolioSnapshot` records (Total Value, PnL) over time.
-  - These snapshots are used to render the **Performance Chart** (1D, 7D, 30D, All).
-- **Allocation**:
-  - The system calculates percentage allocation by Asset Type (Crypto, Fiat, Stocks, etc.) dynamically based on current market values.
-
-### 5. Alerts
-
-- Users can set price or percentage change alerts.
-- The backend monitors price updates and triggers notifications (Email/In-app/Webhook) when conditions are met.
+---
 
 ## 🚀 Setup & Implementation
 
 ### Prerequisites
 
-- Node.js (v18+)
-- PostgreSQL (v14+)
-- Redis (for background jobs)
+- **Node.js**: v18+
+- **PostgreSQL**: v14+
+- **Redis**: v6+ (Required for caching and background jobs)
 
-### 1. Database Setup
+### 1. Backend Setup (`/backend`)
 
-Ensure PostgreSQL is running and create a database (e.g., `crypto_tracker`).
+1.  **Navigate & Install**:
+    ```bash
+    cd backend
+    npm install
+    ```
+2.  **Environment Variables**:
+    ```bash
+    cp .env.example .env
+    ```
+    Update `.env` with your credentials:
+    - `DATABASE_URL`: PostgreSQL connection string.
+    - `REDIS_URL`: Redis connection string (default: `redis://localhost:6379`).
+    - `COINGECKO_API_KEY`: Optional but recommended for higher rate limits.
+3.  **Database Init**:
+    ```bash
+    npx prisma db push  # Synch schema
+    npm run prisma:seed # (Optional) Seed initial data
+    ```
+4.  **Start Server**:
+    ```bash
+    npm run dev
+    # Server runs on http://localhost:3001
+    ```
 
-### 2. Backend Setup
+### 2. Frontend Setup (`/frontend`)
 
-Navigate to the backend directory:
+1.  **Navigate & Install**:
+    ```bash
+    cd frontend
+    npm install
+    ```
+2.  **Environment**:
+    Create `.env.local`:
+    ```env
+    NEXT_PUBLIC_API_URL=http://localhost:3001/api
+    ```
+3.  **Start Web App**:
+    ```bash
+    npm run dev
+    # App runs on http://localhost:3000
+    ```
 
-```bash
-cd backend
-```
+### 3. Mobile App Setup (`/app`)
 
-1. **Install Dependencies**:
+1.  **Navigate & Install**:
+    ```bash
+    cd app
+    npm install
+    ```
+2.  **Environment**:
+    Create `.env`:
+    ```env
+    EXPO_PUBLIC_API_URL=http://localhost:3001/api
+    # If using physical device, replace localhost with your machine's LAN IP (e.g., http://192.168.1.10:3001/api)
+    ```
+3.  **Run with Expo**:
+    ```bash
+    npx expo start
+    ```
 
-   ```bash
-   npm install
-   ```
+    - Press `i` for iOS Simulator.
+    - Press `a` for Android Emulator.
+    - Scan QR code with **Expo Go** on your physical device.
 
-2. **Environment Variables**:
-   Copy the example environment file and configure it:
+---
 
-   ```bash
-   cp .env.example .env
-   ```
+## 🛠 Feature Highlights
 
-   Update `DATABASE_URL` in `.env` to point to your local PostgreSQL instance.
+### ⚡ Global Search
 
-3. **Database Migration**:
-   Push the Prisma schema to your database:
+Instantly search for any cryptocurrency supported by CoinGecko. The search uses a caching layer to provide instant results for popular assets.
 
-   ```bash
-   npm run prisma:push
-   # Or using migrate
-   # npx prisma migrate dev
-   ```
+### 🔔 Smart Alerts
 
-4. **Seed Database** (Optional but recommended):
+Set conditional alerts to stay on top of the market:
 
-   ```bash
-   npm run prisma:seed
-   ```
+- **Price Target**: "Notify when BTC > $100k".
+- **Percentage Change**: "Notify if ETH drops 5% in 1 hour".
+- **Portfolio Drawdown**: "Warn me if my total portfolio value drops by 10%".
 
-5. **Start Development Server**:
-   ```bash
-   npm run dev
-   ```
-   The backend will start at `http://localhost:3001` (or port specified in `.env`).
+### 📊 Advanced Visualization
 
-### 3. Frontend Setup
+- **Allocation Charts**: Donut charts showing distribution by asset or category.
+- **Performance Graphs**: Interactive area charts showing portfolio value over time.
 
-Navigate to the frontend directory:
+---
 
-```bash
-cd frontend
-```
+## 🤝 Contributing
 
-1. **Install Dependencies**:
-
-   ```bash
-   npm install
-   ```
-
-2. **Environment Variables**:
-   Create a `.env.local` file (or copy `.env.example` if available) and set the backend API URL:
-
-   ```bash
-   NEXT_PUBLIC_API_URL=http://localhost:3001/api
-   ```
-
-3. **Start Development Server**:
-   ```bash
-   npm run dev
-   ```
-   The frontend will start at `http://localhost:3000`.
-
-## 🛠 API Documentation
-
-The backend exposes a REST API. Key endpoints include:
-
-- `POST /api/auth/register`: Create a new user account.
-- `POST /api/auth/login`: Authenticate user.
-- `GET /api/portfolios`: List user portfolios.
-- `GET /api/portfolios/:id`: Get portfolio details.
-- `POST /api/portfolios/:id/transactions`: Add a transaction.
-- `GET /api/assets`: List supported assets.
+1. Fork the repo.
+2. Create your feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes.
+4. Push to the branch.
+5. Open a Pull Request.

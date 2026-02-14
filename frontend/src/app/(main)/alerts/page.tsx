@@ -5,17 +5,26 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Bell, TrendingUp, TrendingDown, Target, Activity, Trash2, Eye, EyeOff, Wallet, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useAlerts, useCreateAlert, useUpdateAlert, useDeleteAlert } from '@/lib/hooks/use-alerts';
 import { usePortfolios } from '@/lib/hooks/use-portfolios';
-import { useAssets } from '@/lib/hooks/use-assets';
 import { Alert, Portfolio, Asset } from '@/lib/api-client';
+import { AssetCombobox } from '@/components/asset-combobox';
 
 export default function AlertsPage() {
   const { data: alerts = [], isLoading } = useAlerts();
   const { data: portfolios = [] } = usePortfolios();
-  const { data: assets = [] } = useAssets();
+  // assets removed as AssetCombobox handles it
   const createAlert = useCreateAlert();
   const updateAlert = useUpdateAlert();
   const deleteAlert = useDeleteAlert();
@@ -31,10 +40,26 @@ export default function AlertsPage() {
   const [lookbackWindowMinutes, setLookbackWindowMinutes] = useState('');
   const [isActive, setIsActive] = useState(true);
 
+  // Derived state for requirements
+  const isPortfolioAlert = ['PORTFOLIO_DRAWDOWN', 'TARGET_PNL'].includes(alertType);
+  const isAssetAlert = ['PRICE_ABOVE', 'PRICE_BELOW', 'PERCENT_CHANGE'].includes(alertType);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
     if (!conditionValue) {
-      toast.error('Please fill in all required fields');
+      toast.error('Please enter a condition value');
+      return;
+    }
+
+    if (isPortfolioAlert && !portfolioId) {
+      toast.error('Please select a portfolio for this alert type');
+      return;
+    }
+
+    if (isAssetAlert && !assetId) {
+      toast.error('Please select an asset for this alert type');
       return;
     }
 
@@ -146,74 +171,81 @@ export default function AlertsPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Alert Type *</label>
-                  <select
-                    value={alertType}
-                    onChange={(e) => setAlertType(e.target.value)}
-                    className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  >
-                    <option value="PRICE_ABOVE" className="bg-background text-foreground">Price Above</option>
-                    <option value="PRICE_BELOW" className="bg-background text-foreground">Price Below</option>
-                    <option value="PERCENT_CHANGE" className="bg-background text-foreground">Percent Change</option>
-                    <option value="PORTFOLIO_DRAWDOWN" className="bg-background text-foreground">Portfolio Drawdown</option>
-                    <option value="TARGET_PNL" className="bg-background text-foreground">Target P&L</option>
-                  </select>
+                  <Label htmlFor="alertType">Alert Type *</Label>
+                  <Select value={alertType} onValueChange={(value) => setAlertType(value)}>
+                    <SelectTrigger id="alertType" className="w-full">
+                      <SelectValue placeholder="Select Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PRICE_ABOVE">Price Above</SelectItem>
+                      <SelectItem value="PRICE_BELOW">Price Below</SelectItem>
+                      <SelectItem value="PERCENT_CHANGE">Percent Change</SelectItem>
+                      <SelectItem value="PORTFOLIO_DRAWDOWN">Portfolio Drawdown</SelectItem>
+                      <SelectItem value="TARGET_PNL">Target P&L</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Condition Value *</label>
-                  <input
+                  <Label htmlFor="conditionValue">Condition Value *</Label>
+                  <Input
+                    id="conditionValue"
                     type="number"
                     step="any"
                     value={conditionValue}
                     onChange={(e) => setConditionValue(e.target.value)}
-                    className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Enter value"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Portfolio (Optional)</label>
-                  <select
-                    value={portfolioId}
-                    onChange={(e) => setPortfolioId(e.target.value)}
-                    className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  <Label htmlFor="portfolioId">
+                    Portfolio {isPortfolioAlert ? '*' : '(Optional)'}
+                  </Label>
+                  <Select 
+                    value={portfolioId} 
+                    onValueChange={setPortfolioId} 
+                    disabled={!isPortfolioAlert && isAssetAlert}
                   >
-                    <option value="" className="bg-background text-foreground">Select Portfolio</option>
-                    {portfolios.map((portfolio: Portfolio) => (
-                      <option key={portfolio.id} value={portfolio.id} className="bg-background text-foreground">
-                        {portfolio.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="portfolioId" className={`w-full ${!isPortfolioAlert && !portfolioId ? 'opacity-50' : ''}`}>
+                      <SelectValue placeholder="Select Portfolio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {portfolios.map((portfolio: Portfolio) => (
+                        <SelectItem key={portfolio.id} value={portfolio.id}>
+                          {portfolio.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!isPortfolioAlert && isAssetAlert && (
+                     <p className="text-xs text-muted-foreground">Not applicable for Asset alerts</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Asset (Optional)</label>
-                  <select
+                  <Label htmlFor="assetId">
+                    Asset {isAssetAlert ? '*' : '(Optional)'}
+                  </Label>
+                  <AssetCombobox
                     value={assetId}
-                    onChange={(e) => setAssetId(e.target.value)}
-                    className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="" className="bg-background text-foreground">Select Asset</option>
-                    {assets.map((asset: Asset) => (
-                      <option key={asset.id} value={asset.id} className="bg-background text-foreground">
-                        {asset.symbol} - {asset.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setAssetId}
+                    disabled={!isAssetAlert && isPortfolioAlert}
+                  />
+                  {!isAssetAlert && isPortfolioAlert && (
+                     <p className="text-xs text-muted-foreground">Not applicable for Portfolio alerts</p>
+                  )}
                 </div>
 
                 {alertType === 'PERCENT_CHANGE' && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Lookback Window (Minutes)</label>
-                    <input
+                    <Label htmlFor="lookbackWindow">Lookback Window (Minutes)</Label>
+                    <Input
+                      id="lookbackWindow"
                       type="number"
                       value={lookbackWindowMinutes}
                       onChange={(e) => setLookbackWindowMinutes(e.target.value)}
-                      className="w-full h-10 px-3 bg-white/5 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="60"
                     />
                   </div>
