@@ -67,8 +67,4 @@ services:
     dockerfilePath: frontend/Dockerfile
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: crypto-backend
-          property: host
-        # The code now handles the /api suffix automatically.
+        value: https://crypto-backend-8ei5.onrender.com
