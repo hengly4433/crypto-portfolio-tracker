@@ -23,6 +23,8 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false # Set manually in dashboard: postgresql://postgres.kvpueryjbnrtatcjdfct:Hengly@4433@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+      - key: DIRECT_URL
+        sync: false # Set manually in dashboard to Session Pool (port 5432)
       - key: REDIS_URL
         fromService:
           type: redis
