@@ -19,8 +19,8 @@ async function main() {
     // Initialize scheduled jobs (price updates, alert checks, etc.)
     initializeAllJobs();
 
-    httpServer.listen(PORT, () => {
-      logger.info(`Server is running on port ${PORT}`);
+    httpServer.listen(Number(PORT), '0.0.0.0', () => {
+      logger.info(`Server is running on port ${PORT} at 0.0.0.0`);
     });
   } catch (error) {
     logger.error(error, 'Failed to start server');
