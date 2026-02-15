@@ -23,10 +23,10 @@ The project follows a modular client-server architecture designed for scalabilit
 
 ### 3. Mobile App (`/app`)
 
-- **Framework**: Expo (React Native).
-- **Navigation**: React Navigation (Stack & Tab).
-- **State Management**: Zustand for global client state.
-- **Storage**: AsyncStorage for local persistence.
+- **Framework**: Flutter.
+- **Navigation**: Flutter Navigation.
+- **State Management**: Provider for scalable state management.
+- **Storage**: Flutter Secure Storage for secure local persistence.
 
 ---
 
@@ -125,23 +125,21 @@ The system uses BullMQ with Redis to handle asynchronous tasks reliably:
 1.  **Navigate & Install**:
     ```bash
     cd app
-    npm install
+    flutter pub get
     ```
-2.  **Environment**:
-    Create `.env`:
-    ```env
-    EXPO_PUBLIC_API_URL=http://localhost:3001/api
-    # If using physical device, replace localhost with your machine's LAN IP (e.g., http://192.168.1.10:3001/api)
-    ```
-3.  **Run with Expo**:
+2.  **Configuration**:
+    The API URL is configured in `lib/core/api/api_client.dart`.
+    Default: `http://localhost:3001/api`.
+
+    To run on a physical device, update the `_defaultBaseUrl` in `lib/core/api/api_client.dart` to your machine's LAN IP.
+
+3.  **Run with Flutter**:
 
     ```bash
-    npx expo start
+    flutter run
     ```
 
-    - Press `i` for iOS Simulator.
-    - Press `a` for Android Emulator.
-    - Scan QR code with **Expo Go** on your physical device.
+    - Select your target device (iOS Simulator / Android Emulator) when prompted.
 
 ---
 

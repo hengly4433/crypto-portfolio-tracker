@@ -106,7 +106,7 @@ The system runs a background job every minute to check your alert conditions.
 1.  **Server-Side**: The backend checks CoinGecko API prices every 60 seconds.
 2.  **Trigger**: If a condition is met, a **Notification Job** is created.
 3.  **Delivery**:
-    - **Mobile**: Push Notification via Expo/Firebase.
+    - **Mobile**: Push Notification via Flutter/Firebase.
     - **Email**: (If configured) Sent via SMTP.
     - **In-App**: Shows up in your Notifications center.
 
