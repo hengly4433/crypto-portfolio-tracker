@@ -3,8 +3,9 @@ import { Transaction, TransactionSide } from '@prisma/client';
 import { PositionService } from '../positions/position.service';
 import { PriceService } from '../price/price.service';
 import { AuditService } from '../audit/audit.service';
+import { AssetService } from '../assets/asset.service';
 import { Prisma } from '@prisma/client';
-import { BadRequestError } from '../../common/errors/http-error';
+import { BadRequestError, NotFoundError } from '../../common/errors/http-error';
 
 export class TransactionService {
   private positionService: PositionService;
@@ -23,7 +24,7 @@ export class TransactionService {
    */
   async createTransaction(data: {
     portfolioId: bigint;
-    assetId: bigint;
+    assetId: bigint | string | number; // Allow CoinGecko ID
     side: TransactionSide;
     quantity: number | Prisma.Decimal;
     price?: number | Prisma.Decimal; // Optional for non-trading transactions
@@ -36,7 +37,7 @@ export class TransactionService {
   }): Promise<Transaction> {
     const {
       portfolioId,
-      assetId,
+      assetId: idOrCoingeckoId,
       side,
       quantity,
       price,
@@ -47,6 +48,11 @@ export class TransactionService {
       feeCurrency,
       note,
     } = data;
+    
+    // Resolve asset (create from CoinGecko if needed)
+    const assetService = new AssetService();
+    const assetResolved = await assetService.ensureAsset(idOrCoingeckoId);
+    const assetId = assetResolved.id;
     
     const qtyDecimal = new Prisma.Decimal(quantity);
     const priceDecimal = price ? new Prisma.Decimal(price) : new Prisma.Decimal(0);
@@ -597,6 +603,234 @@ export class TransactionService {
   }
 
   /**
+   * Revert the effect of a transaction on the position
+   */
+  private async revertTransactionEffect(
+    tx: Prisma.TransactionClient,
+    transaction: Transaction,
+    portfolioId: bigint
+  ): Promise<void> {
+    const position = await tx.position.findFirst({
+      where: {
+        portfolioId,
+        assetId: transaction.assetId,
+        userAccountId: transaction.userAccountId,
+      },
+    });
+
+    if (!position) {
+      console.warn(`Position not found for transaction ${transaction.id}, skipping revert.`);
+      return;
+    }
+
+    const qty = transaction.quantity;
+    const gross = transaction.grossAmount;
+    const fee = transaction.feeAmount;
+
+    // Helper to update position
+    const updatePos = async (data: Prisma.PositionUpdateInput) => {
+      await tx.position.update({
+        where: { id: position.id },
+        data,
+      });
+    };
+
+    switch (transaction.side) {
+      case 'BUY': {
+        const asset = await tx.asset.findUnique({ where: { id: transaction.assetId } });
+        const isFeeInAsset = asset && transaction.feeCurrency === asset.symbol;
+        
+        const netQtyBuy = isFeeInAsset ? qty.minus(fee) : qty;
+        
+        const portfolio = await tx.portfolio.findUnique({ where: { id: portfolioId } });
+        let grossBase = gross;
+        let feeBase = fee;
+        
+        if (portfolio && transaction.transactionCurrency !== portfolio.baseCurrency) {
+             const fxRate = await this.priceService.getFxRate(
+                transaction.transactionCurrency, 
+                portfolio.baseCurrency
+             );
+             grossBase = gross.mul(fxRate);
+             feeBase = fee.mul(fxRate);
+        }
+
+        const totalCostBuy = isFeeInAsset ? grossBase : grossBase.plus(feeBase);
+        
+        const newQtyBuy = position.quantity.minus(netQtyBuy);
+        const newCostBuy = position.costBasis.minus(totalCostBuy);
+        const newAvgBuy = newQtyBuy.isZero() ? new Prisma.Decimal(0) : newCostBuy.div(newQtyBuy);
+
+        await updatePos({
+            quantity: newQtyBuy,
+            costBasis: newCostBuy,
+            avgPrice: newAvgBuy,
+        });
+        break;
+      }
+
+      case 'SELL': {
+        const costRestored = position.avgPrice.mul(qty);
+        const newQtySell = position.quantity.plus(qty);
+        const newCostSell = position.costBasis.plus(costRestored);
+        
+        const pfolioSell = await tx.portfolio.findUnique({ where: { id: portfolioId } });
+        let grossBaseSell = gross;
+        let feeBaseSell = fee;
+        if (pfolioSell && transaction.transactionCurrency !== pfolioSell.baseCurrency) {
+              const fxRate = await this.priceService.getFxRate(
+                transaction.transactionCurrency, 
+                pfolioSell.baseCurrency
+             );
+             grossBaseSell = gross.mul(fxRate);
+             feeBaseSell = fee.mul(fxRate);
+        }
+        
+        const pnlReversal = grossBaseSell.minus(costRestored).minus(feeBaseSell);
+        const newRealized = position.realizedPnl.minus(pnlReversal);
+
+        await updatePos({
+            quantity: newQtySell,
+            costBasis: newCostSell,
+            realizedPnl: newRealized,
+        });
+        break;
+      }
+
+      case 'DEPOSIT':
+      case 'TRANSFER_IN':
+      case 'INCOME': {
+        const newQtyIn = position.quantity.minus(qty);
+        const newAvgIn = newQtyIn.isZero() ? new Prisma.Decimal(0) : position.costBasis.div(newQtyIn);
+        await updatePos({
+            quantity: newQtyIn,
+            avgPrice: newAvgIn
+        });
+        break;
+      }
+
+      case 'WITHDRAWAL':
+      case 'TRANSFER_OUT':
+      case 'FEE': {
+         const costRestoredOut = position.avgPrice.mul(qty);
+         const newQtyOut = position.quantity.plus(qty);
+         const newCostOut = position.costBasis.plus(costRestoredOut);
+         await updatePos({
+             quantity: newQtyOut,
+             costBasis: newCostOut
+         });
+         break;
+      }
+    }
+  }
+
+  async updateTransaction(
+    _userId: bigint,
+    transactionId: bigint,
+    portfolioId: bigint,
+    data: {
+        assetId?: bigint | string | number;
+        side?: TransactionSide;
+        quantity?: number | Prisma.Decimal;
+        price?: number | Prisma.Decimal;
+        transactionCurrency?: string;
+        date?: Date | string;
+        userAccountId?: bigint;
+        feeAmount?: number | Prisma.Decimal;
+        feeCurrency?: string;
+        note?: string;
+    }
+  ): Promise<Transaction> {
+    return prisma.$transaction(async (tx) => {
+        const oldTx = await tx.transaction.findUnique({ where: { id: transactionId } });
+        if (!oldTx) throw new NotFoundError('Transaction not found');
+        if (oldTx.portfolioId !== portfolioId) throw new BadRequestError('Transaction does not belong to portfolio');
+
+        // 1. Revert Old Effect
+        await this.revertTransactionEffect(tx, oldTx, portfolioId);
+
+        // 2. Prepare/Validate New Data
+        const merged = {
+            assetId: data.assetId ?? oldTx.assetId,
+            side: data.side ?? oldTx.side,
+            quantity: data.quantity ?? oldTx.quantity,
+            price: data.price ?? oldTx.price,
+            transactionCurrency: data.transactionCurrency ?? oldTx.transactionCurrency,
+            date: data.date ? new Date(data.date) : oldTx.tradeTime,
+            userAccountId: data.userAccountId ?? oldTx.userAccountId,
+            feeAmount: data.feeAmount ?? oldTx.feeAmount,
+            feeCurrency: data.feeCurrency ?? oldTx.feeCurrency,
+            note: data.note ?? oldTx.note,
+        };
+
+        const qtyDecimal = new Prisma.Decimal(merged.quantity);
+        const priceDecimal = new Prisma.Decimal(merged.price);
+        const grossAmount = qtyDecimal.mul(priceDecimal);
+        const feeAmountDecimal = new Prisma.Decimal(merged.feeAmount);
+
+        this.validateTransaction(merged.side, qtyDecimal, priceDecimal);
+
+        let assetId = BigInt(merged.assetId as any);
+        if (data.assetId) {
+             const assetService = new AssetService();
+             const assetResolved = await assetService.ensureAsset(data.assetId);
+             assetId = assetResolved.id;
+        }
+
+        const asset = await tx.asset.findUnique({ where: { id: assetId } });
+        if (!asset) throw new BadRequestError('Asset not found');
+
+        const portfolio = await tx.portfolio.findUnique({ where: { id: portfolioId } });
+        if (!portfolio) throw new BadRequestError('Portfolio not found');
+
+        let grossAmountBase = grossAmount;
+        let feeAmountBase = feeAmountDecimal;
+
+        if (merged.transactionCurrency !== portfolio.baseCurrency) {
+            const fxRate = await this.priceService.getFxRate(merged.transactionCurrency, portfolio.baseCurrency);
+            grossAmountBase = grossAmount.mul(fxRate);
+            feeAmountBase = feeAmountDecimal.mul(fxRate);
+        }
+
+        // 4. Update Transaction Record
+        const updatedTx = await tx.transaction.update({
+            where: { id: transactionId },
+            data: {
+                assetId,
+                side: merged.side,
+                quantity: qtyDecimal,
+                price: priceDecimal,
+                transactionCurrency: merged.transactionCurrency,
+                grossAmount,
+                feeAmount: feeAmountDecimal,
+                feeCurrency: merged.feeCurrency,
+                tradeTime: merged.date,
+                note: merged.note,
+                userAccountId: merged.userAccountId,
+            }
+        });
+
+        // 5. Apply New Effect
+        await this.updatePositionForTransaction(tx, {
+            portfolioId,
+            assetId,
+            userAccountId: merged.userAccountId,
+            side: merged.side,
+            quantity: qtyDecimal,
+            grossAmountBase,
+            feeAmountBase,
+            feeAmount: feeAmountDecimal,
+            feeCurrency: merged.feeCurrency ?? undefined,
+            assetSymbol: asset.symbol,
+            priceDecimal: priceDecimal,
+            portfolioBaseCurrency: portfolio.baseCurrency,
+        });
+
+        return updatedTx;
+    });
+  }
+
+  /**
    * Delete transaction (and reverse position changes)
    */
   async deleteTransaction(transactionId: bigint, portfolioId: bigint): Promise<void> {
@@ -607,12 +841,14 @@ export class TransactionService {
       });
 
       if (!transaction) {
-        throw new BadRequestError('Transaction not found');
+        throw new NotFoundError('Transaction not found');
       }
 
       if (transaction.portfolioId !== portfolioId) {
         throw new BadRequestError('Transaction does not belong to this portfolio');
       }
+
+      await this.revertTransactionEffect(tx, transaction, portfolioId);
 
       await tx.transaction.delete({
         where: { id: transactionId },

@@ -138,11 +138,8 @@ export class PriceController {
   static async getMarketData(req: Request, res: Response, next: NextFunction) {
     try {
       const idsParam = req.query.ids as string;
-      if (!idsParam || idsParam.trim().length === 0) {
-        throw new BadRequestError('Query parameter "ids" is required (comma-separated CoinGecko IDs)');
-      }
-
-      const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean);
+      const ids = idsParam ? idsParam.split(',').map(id => id.trim()).filter(Boolean) : undefined;
+      
       const currency = (req.query.currency as string) || 'usd';
       const sparkline = req.query.sparkline === 'true';
 

@@ -3,7 +3,7 @@ import { AlertType } from '@prisma/client';
 
 export interface CreateAlertDto {
   portfolioId?: bigint;
-  assetId?: bigint;
+  assetId?: bigint | string | number;
   alertType: AlertType;
   conditionValue: number;
   lookbackWindowMinutes?: number;
@@ -32,7 +32,7 @@ export interface AlertResponseDto {
 export const createAlertSchema = z.object({
   body: z.object({
     portfolioId: z.string().optional().transform(val => val ? BigInt(val) : undefined),
-    assetId: z.string().optional().transform(val => val ? BigInt(val) : undefined),
+    assetId: z.union([z.string(), z.number()]).optional().transform(val => val ? val : undefined),
     alertType: z.nativeEnum(AlertType),
     conditionValue: z.number().positive(),
     lookbackWindowMinutes: z.number().int().positive().optional(),

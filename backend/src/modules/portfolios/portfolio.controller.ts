@@ -24,6 +24,23 @@ export class PortfolioController {
     }
   };
 
+  updatePortfolio = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = BigInt(req.user!.userId);
+      const portfolioId = BigInt(req.params.id as string);
+      const { name, baseCurrency } = req.body;
+      
+      const portfolio = await this.portfolioService.updatePortfolio(userId, portfolioId, { name, baseCurrency });
+      
+      const response = JSON.parse(JSON.stringify(portfolio, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      ));
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getMyPortfolios = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = BigInt(req.user!.userId);

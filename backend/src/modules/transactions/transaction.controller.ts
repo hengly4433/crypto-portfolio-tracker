@@ -15,7 +15,7 @@ export class TransactionController {
       
       const transaction = await this.transactionService.createTransaction({
         portfolioId,
-        assetId: BigInt(assetId),
+        assetId: assetId,
         side,
         quantity,
         price,
@@ -31,6 +31,35 @@ export class TransactionController {
         typeof value === 'bigint' ? value.toString() : value
       ));
       res.status(201).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateTransaction = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = BigInt(req.user!.userId);
+      const portfolioId = BigInt(req.params.portfolioId as string);
+      const transactionId = BigInt(req.params.transactionId as string);
+      const { assetId, side, quantity, price, transactionCurrency, date, userAccountId, feeAmount, feeCurrency, note } = req.body;
+
+      const transaction = await this.transactionService.updateTransaction(userId, transactionId, portfolioId, {
+        assetId,
+        side,
+        quantity,
+        price,
+        transactionCurrency,
+        date,
+        userAccountId: userAccountId ? BigInt(userAccountId) : undefined,
+        feeAmount,
+        feeCurrency,
+        note,
+      });
+
+      const response = JSON.parse(JSON.stringify(transaction, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      ));
+      res.json(response);
     } catch (error) {
       next(error);
     }

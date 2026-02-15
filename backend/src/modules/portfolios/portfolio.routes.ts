@@ -14,9 +14,17 @@ const createPortfolioSchema = z.object({
   }),
 });
 
+const updatePortfolioSchema = z.object({
+  body: z.object({
+    name: z.string().min(1).optional(),
+    baseCurrency: z.string().optional(),
+  }),
+});
+
 router.use(authMiddleware);
 
 router.post('/', validate(createPortfolioSchema), portfolioController.createPortfolio);
+router.put('/:id', validate(updatePortfolioSchema), portfolioController.updatePortfolio);
 router.get('/', portfolioController.getMyPortfolios);
 router.get('/:id', portfolioController.getPortfolioById);
 router.get('/:id/summary', portfolioController.getPortfolioSummary);

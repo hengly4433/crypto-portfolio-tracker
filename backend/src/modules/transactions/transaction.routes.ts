@@ -23,9 +23,25 @@ const createTransactionSchema = z.object({
   }),
 });
 
+const updateTransactionSchema = z.object({
+  body: z.object({
+    assetId: z.string().optional(),
+    side: z.enum(['BUY', 'SELL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'INCOME', 'FEE']).optional(),
+    quantity: z.number().positive().optional(),
+    price: z.number().min(0).optional(),
+    transactionCurrency: z.string().optional(),
+    date: z.string().datetime().optional(),
+    userAccountId: z.string().optional(),
+    feeAmount: z.number().min(0).optional(),
+    feeCurrency: z.string().optional(),
+    note: z.string().optional(),
+  }),
+});
+
 router.use(authMiddleware);
 
 router.post('/', validate(createTransactionSchema), transactionController.createTransaction);
+router.put('/:transactionId', validate(updateTransactionSchema), transactionController.updateTransaction);
 router.get('/', transactionController.getPortfolioTransactions);
 router.delete('/:transactionId', transactionController.deleteTransaction);
 

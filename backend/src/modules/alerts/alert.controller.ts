@@ -18,7 +18,7 @@ export class AlertController {
       const userId = BigInt(req.user!.userId);
       const createAlertDto: CreateAlertDto = {
         portfolioId: req.body.portfolioId ? BigInt(req.body.portfolioId) : undefined,
-        assetId: req.body.assetId ? BigInt(req.body.assetId) : undefined,
+        assetId: req.body.assetId,
         alertType: req.body.alertType,
         conditionValue: req.body.conditionValue,
         lookbackWindowMinutes: req.body.lookbackWindowMinutes,

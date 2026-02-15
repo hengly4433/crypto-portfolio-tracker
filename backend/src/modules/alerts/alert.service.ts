@@ -5,6 +5,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { BadRequestError, NotFoundError } from '../../common/errors/http-error';
 import { Prisma } from '@prisma/client';
 import { CreateAlertDto, UpdateAlertDto } from './alert.dto';
+import { AssetService } from '../assets/asset.service';
 
 export class AlertService {
   private priceService: PriceService;
@@ -35,20 +36,18 @@ export class AlertService {
     }
 
     // Validate asset exists if assetId is provided
+    let finalAssetId: bigint | undefined;
     if (data.assetId) {
-      const asset = await prisma.asset.findUnique({
-        where: { id: data.assetId },
-      });
-      if (!asset) {
-        throw new BadRequestError('Asset not found');
-      }
+      const assetService = new AssetService();
+      const asset = await assetService.ensureAsset(data.assetId);
+      finalAssetId = asset.id;
     }
 
     return prisma.alert.create({
       data: {
         userId,
         portfolioId: data.portfolioId,
-        assetId: data.assetId,
+        assetId: finalAssetId,
         alertType: data.alertType,
         conditionValue: new Prisma.Decimal(data.conditionValue),
         lookbackWindowMinutes: data.lookbackWindowMinutes,

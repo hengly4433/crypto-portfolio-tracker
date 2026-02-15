@@ -237,13 +237,34 @@ export class PriceService {
    * Uses /coins/markets endpoint.
    */
   async fetchMarketData(
-    coingeckoIds: string[],
+    coingeckoIds?: string[],
     quoteCurrency: string = 'usd',
     includeSparkline: boolean = false,
   ): Promise<CoinMarketData[]> {
-    if (coingeckoIds.length === 0) return [];
+    // If no IDs provided, fetch top market cap (limit 50)
+    if (!coingeckoIds || coingeckoIds.length === 0) {
+      const cacheKey = `cg:market:top:50:${quoteCurrency}:${includeSparkline}`;
+      const cached = await this.getCached(cacheKey);
+      if (cached) return JSON.parse(cached);
 
-    // Check cache
+      try {
+        const data = await this.coingeckoRequest<CoinMarketData[]>('/coins/markets', {
+          vs_currency: quoteCurrency,
+          order: 'market_cap_desc',
+          per_page: 50,
+          page: 1,
+          sparkline: includeSparkline,
+          price_change_percentage: '24h',
+        });
+        await this.setCache(cacheKey, JSON.stringify(data), MARKET_DATA_CACHE_TTL);
+        return data;
+      } catch (error) {
+        log.error({ error }, 'Error fetching top market data');
+        throw error;
+      }
+    }
+
+    // Check cache for specific IDs
     const cacheKey = `cg:market:${coingeckoIds.sort().join(',')}:${quoteCurrency}:${includeSparkline}`;
     const cached = await this.getCached(cacheKey);
     if (cached) {
