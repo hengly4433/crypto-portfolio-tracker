@@ -43,18 +43,4 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://crypto-frontend-x285.onrender.com
-
-  # --------------------------------------------------------------------------------
-  # FRONTEND (Next.js)
-  # --------------------------------------------------------------------------------
-  - type: web
-    name: crypto-frontend
-    region: singapore
-    plan: free # or starter
-    runtime: docker
-    rootDir: .
-    dockerfilePath: frontend/Dockerfile
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://crypto-backend-8ei5.onrender.com
+        sync: false # Set manually in dashboard to your Vercel URL
