@@ -285,7 +285,20 @@ class ApiClient {
         return { error: 'Session expired. Please login again.' };
       }
 
-      const data = await response.json();
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON (e.g. 404 HTML page), treat as error text
+        const text = await response.text();
+        return {
+          error: `API Error: ${response.status} ${response.statusText}`,
+          message: text.substring(0, 100) // truncate potentially long HTML
+        };
+      }
 
       if (!response.ok) {
         return {

@@ -50,6 +50,14 @@ app.use('/api/prices', priceRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/exchanges', exchangeRoutes);
 
+// 404 Handler for API routes
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Not Found'
+  });
+});
+
 // Error Middleware
 app.use(errorMiddleware);
 
